@@ -3,16 +3,15 @@
 #include <algorithm>
 using namespace std;
 
-#include "App.h"
-
+#include "ADCInternal.h"
+#include "Blinker.h"
 #include "SubsystemGps.h"
 #include "SubsystemTx.h"
-
 #include "JSONMsgRouter.h"
 #include "TempSensorInternal.h"
 #include "USB.h"
 
-#include "RP2040.h"
+#include "MYRP2040.h"
 
 
 
@@ -60,12 +59,9 @@ inline static int Init()
     return 1;
 }
 
-#include <zephyr/init.h>
-SYS_INIT(Init, APPLICATION, 1);
-
+// TODO -- run Init
 
 class Application
-: public App
 {
 public:
 
@@ -78,6 +74,13 @@ public:
             .enabled = true,
             .apiMode = true,
         };
+
+        USB::SetStringManufacturer("Traquito");
+        USB::SetStringProduct("Jetpack");
+        USB::SetStringCdcInterface("Traquito Jetpack");
+        USB::SetStringVendorInterface("Traquito Jetpack");
+        USB::SetVid(0x2FE3);
+        USB::SetPid(0x0008);
     }
 
     /////////////////////////////////////////////////////////////////
@@ -161,11 +164,11 @@ public:
         });
 
         // Determine mode of operation
-        bool configurationMode = false;
+        configurationMode_ = false;
         if (testCfg.enabled == false)
         {
             USB::SetCallbackConnected([&]{
-                configurationMode = true;
+                configurationMode_ = true;
             });
             USB::SetCallbackDisconnected([]{
                 LogModeSync();
@@ -174,18 +177,26 @@ public:
                 PAL.Reset();
             });
         }
-        USB::Enable();
 
         Log("Determining startup mode");
         LogNL();
-        Evm::MainLoopRunFor(1'000);
+        // Evm::MainLoopRunFor(1'000);
 
+        // wait for USB events to fire
+        tedStartupRole_.SetCallback([this]{
+            EnableMode();
+        });
+        tedStartupRole_.RegisterForTimedEvent(1'000);
+    }
+
+    void EnableMode()
+    {
         if (testCfg.enabled && testCfg.evmOnly)
         {
             BlinkerIdle();
             LogNL(2);
             Log("Main Loop Only");
-            Evm::MainLoop();
+            return;
         }
 
         bool cfgModeEnableBlink = true;
@@ -198,16 +209,16 @@ public:
             if (testCfg.apiMode == true)
             {
                 Log("API Mode Enabled");
-                configurationMode = true;
+                configurationMode_ = true;
                 cfgModeEnableBlink = false;
             }
             else
             {
-                configurationMode = false;
+                configurationMode_ = false;
             }
         }
         
-        if (configurationMode)
+        if (configurationMode_)
         {
             ConfigurationMode(cfgModeEnableBlink);
         }
@@ -230,9 +241,6 @@ public:
                 PAL.Reset();
             });
         }
-
-        // Handle events
-        Evm::MainLoop();
     }
 
     /////////////////////////////////////////////////////////////////
@@ -248,7 +256,7 @@ public:
         // announce the temperature regularly
         static TimedEventHandlerDelegate tedTemp;
         tedTemp.SetCallback([this]{
-            JSONMsgRouter::Send([&](const auto &out){
+            router_.Send([&](const auto &out){
                 out["type"] = "TEMP";
                 out["tempC"] = tempSensor_.GetTempC();
                 out["tempF"] = tempSensor_.GetTempF();
@@ -262,7 +270,6 @@ public:
             BlinkerIdle();
         }
     }
-
 
 
     /////////////////////////////////////////////////////////////////
@@ -569,7 +576,7 @@ public:
         string   grid56    = fix_.maidenheadGrid.substr(4, 2);
         uint32_t altM      = fix_.altitudeM < 0 ? 0 : fix_.altitudeM;
         int8_t   tempC     = tempSensor_.GetTempC();
-        double   voltage   = PAL.MeasureVCC();  // capture under max load
+        double   voltage   = ADC::GetMilliVoltsVCC();  // capture under max load
         bool     gpsValid  = true;
 
         ssTx_.SendEncodedMessage(
@@ -742,6 +749,15 @@ private:
 
     void SetupJSON()
     {
+        UartAddLineStreamCallback(UART::UART_USB, [this](const string &line){
+            router_.Route(line);
+        });
+
+        router_.SetOnReceiveCallback([this](const string &jsonStr){
+            UartTarget target(UART::UART_USB);
+            Log(jsonStr);
+        });
+
         JSONMsgRouter::RegisterHandler("REQ_GET_DEVICE_INFO", [this](auto &in, auto &out){
             out["type"] = "REP_GET_DEVICE_INFO";
 
@@ -759,11 +775,13 @@ private:
 
     void ReadDeviceTree()
     {
-        pinLedGreen_ = { DT_GET(pin_led_green) };
+        pinLedGreen_ = { 25 };
     }
 
 
 private:
+
+    bool configurationMode_ = false;
 
     Pin pinLedGreen_;
 
@@ -772,6 +790,9 @@ private:
 
     Fix3DPlus fix_;
 
+    JSONMsgRouter::Iface router_;
+
+    TimedEventHandlerDelegate tedStartupRole_;
     TimedEventHandlerDelegate tedRadioOn_;
     TimedEventHandlerDelegate tedSend_;
     TimedEventHandlerDelegate tedWatchdog_;
