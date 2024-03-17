@@ -18,8 +18,6 @@ public:
 
     SubsystemTx()
     {
-        ReadDeviceTree();
-
         Disable();
 
         SetupShell();
@@ -244,15 +242,18 @@ private:
         Shell::AddCommand("app.tx", [this](vector<string> argList){
             if (argList[0] == "on") { Enable();  }
             else                    { Disable(); }
-        }, { .argCount = 1, .help = "tx subsystem <on/off>"});
+        }, { .argCount = 1, .help = "power clockgen <on/off>"});
+
+        Shell::AddCommand("app.radio", [this](vector<string> argList){
+            if (argList[0] == "on") { Enable();  RadioOn();  }
+            else                    {            RadioOff(); }
+        }, { .argCount = 1, .help = "clockgen run <on/off>"});
 
         Shell::AddCommand("app.wspr.send", [this](vector<string> argList){
             string callsign = argList[0];
             string grid = argList[1];
 
-            Evm::QueueWork("app.wspr.send", [=, this]{
-                TestWsprSend(callsign, grid);
-            });
+            TestWsprSend(callsign, grid);
         }, { .argCount = 2, .help = "wspr send <callsign> <grid>"});
     }
 
@@ -322,20 +323,12 @@ private:
         });
     }
 
-    void ReadDeviceTree()
-    {
-        pinTxLoadSwitchOnOff_ = { DT_GET(pin_tx_load_switch_on_off), Pin::Type::OUTPUT, 1 };
-
-        pinSi5351_ = { DT_GET(pin_si5351), Pin::Type::INPUT };
-    }
-
 
 private:
 
     Configuration cfg_;
 
-    Pin pinTxLoadSwitchOnOff_;
-    Pin pinSi5351_;
+    Pin pinTxLoadSwitchOnOff_{ 28, Pin::Type::OUTPUT, 1 };
 
     bool enabled_ = false;
     bool on_ = false;
