@@ -6,21 +6,11 @@
 
 
 
-// inline static int InitSubsystemGps()
-// {
-//     // 7ms from 180ms of gps draining high current at startup.
-//     // possible the uart driver inits and the time between then and
-//     // now is the high current.
-//     Pin{ DT_GET(pin_gps_reset), Pin::Type::OUTPUT, 0 };
-//     Pin{ DT_GET(pin_gps_uart1_tx), Pin::Type::OUTPUT, 0 };
-
-//     return 1;
-// }
-
-// #include <zephyr/init.h>
-// SYS_INIT(InitSubsystemGps, POST_KERNEL, 1);
-
-// TODO -- replicate this
+inline static void InitSubsystemGps()
+{
+    Pin::Configure(6, Pin::Type::OUTPUT, 0);
+    Pin::Configure(8, Pin::Type::OUTPUT, 0);
+}
 
 
 class SubsystemGps

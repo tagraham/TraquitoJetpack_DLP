@@ -11,13 +11,11 @@ using namespace std;
 #include "TempSensorInternal.h"
 #include "USB.h"
 
-#include "MYRP2040.h"
-
 
 
 struct TestConfiguration
 {
-    bool enabled = false;
+    bool enabled = true;
 
     bool watchdogOn = true;
     bool logAsync = true;
@@ -33,33 +31,28 @@ TestConfiguration testCfg;
 static const bool API_MODE_BUILD = false;
 
 
-// 1ms instead of 700ms of high initial current
-// lower speed w/ usb couldn't keep up
-inline static int Init()
+inline static void PowerSave()
 {
     // 12mA baseline
-    RP2040::Clock::SetClock48MHzNew();
+    Clock::SetClockMHz(6);
+    Clock::DisableUSB();
 
     if (testCfg.enabled)
     {
-        RP2040::Clock::PrintAll();
+        Clock::PrintAll();
     }
 
     // saves 5mA at 125MHz
     // saves 2mA at  48MHz
-    RP2040::Peripheral::DisablePeripheralList({
-        RP2040::Peripheral::SPI1,
-        RP2040::Peripheral::SPI0,
-        RP2040::Peripheral::PWM,
-        RP2040::Peripheral::PIO1,
-        RP2040::Peripheral::PIO0,
-        RP2040::Peripheral::I2C1,
+    PeripheralControl::DisablePeripheralList({
+        PeripheralControl::SPI1,
+        PeripheralControl::SPI0,
+        PeripheralControl::PWM,
+        PeripheralControl::PIO1,
+        PeripheralControl::PIO0,
+        PeripheralControl::I2C1,
     });
-
-    return 1;
 }
-
-// TODO -- run Init
 
 class Application
 {
@@ -90,6 +83,26 @@ public:
     void Run()
     {
         Timeline::Global().Event("Application");
+
+        static uint32_t count = 0;
+        static bool show = false;
+        UartAddLineStreamCallback(UART::UART_1, [](const string &line){
+            UartTarget target(UART::UART_0);
+            if (show)
+            {
+                Log(line);
+            }
+            ++count;
+        });
+
+        Shell::AddCommand("count", [this](vector<string> argList){
+            Log(count);
+        }, { .argCount = 0, .help = ""});
+
+        Shell::AddCommand("show", [this](vector<string> argList){
+            show = !show;
+        }, { .argCount = 0, .help = ""});
+
 
         LogNL(2);
         Log("Module Details");

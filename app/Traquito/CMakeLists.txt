@@ -27,9 +27,7 @@ if (PICO_SDK_VERSION_STRING VERSION_LESS "1.4.0")
   message(FATAL_ERROR "Raspberry Pi Pico SDK version 1.4.0 (or later) required. Your version is ${PICO_SDK_VERSION_STRING}")
 endif()
 
-set(PICO_BOARD pico_w)
-set(WIFI_SSID DM_WIFI_2.4)
-set(WIFI_PASSWORD wifiwifi)
+set(PICO_BOARD_ACTUAL "pico")
 
 
 # Use TinyUSB with FreeRTOS
@@ -110,6 +108,7 @@ target_link_libraries(${PROJECT_NAME}
 
 target_compile_definitions(${PROJECT_NAME} PRIVATE
     PICO_FLASH_ASSUME_CORE1_SAFE=1
+    PICO_BOARD_ACTUAL="${PICO_BOARD_ACTUAL}"
 )
 
 # Add the standard include files to the build
