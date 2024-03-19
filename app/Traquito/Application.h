@@ -19,7 +19,7 @@ struct TestConfiguration
 
     bool watchdogOn = true;
     bool logAsync = true;
-    bool evmOnly = false;
+    bool evmOnly = true;
     bool sendEncoded = true;
     bool apiMode = false;
 };
@@ -117,6 +117,7 @@ Debug();
         if (testCfg.enabled == false)
         {
             USB::SetCallbackConnected([&]{
+                Log("USB CONNECTED");
                 configurationMode_ = true;
             });
             USB::SetCallbackDisconnected([]{
@@ -129,8 +130,6 @@ Debug();
 
         Log("Determining startup mode");
         LogNL();
-        // Evm::MainLoopRunFor(1'000);
-
         // wait for USB events to fire
         tedStartupRole_.SetCallback([this]{
             EnableMode();
@@ -639,17 +638,30 @@ private:
 
     void PowerSave()
     {
-        // 12mA baseline
+        Log("Power saving processing");
+
+        // prepare to swtich to 48MHz in the event that USB is connected
+        // later.  willing to take a moment longer on high power to
+        // speed up calculation and make device startup not annoyingly
+        // longer. ~70ms to accomplish.
+        Log("Prepare 48MHz clock speed");
+        Clock::PrepareClockMHz(48);
+
+        // 5mA baseline
+        // takes ~10ms to accomplish
+        Log("Drop to 6MHz clock speed");
         Clock::SetClockMHz(6);
-        Clock::DisableUSB();
+        LogNL();
 
         if (testCfg.enabled)
         {
             Clock::PrintAll();
+            LogNL();
         }
 
         // saves 5mA at 125MHz
         // saves 2mA at  48MHz
+        Log("Disable unused peripherals");
         PeripheralControl::DisablePeripheralList({
             PeripheralControl::SPI1,
             PeripheralControl::SPI0,
@@ -658,6 +670,21 @@ private:
             PeripheralControl::PIO0,
             PeripheralControl::I2C1,
         });
+
+        // Set up USB to be off unless VBUS detected, but we'll get notified
+        // before USB re-enabled so we can get up to speed to handle the bus.
+        // emperically I see 45MHz is the minimum required but let's do 48MHz
+        // just because.        
+        USB::SetCallbackVbusConnected([]{
+            Log("App VBUS HIGH handler, switching to 48MHz");
+            Clock::SetClockMHz(48);
+        });
+        USB::SetCallbackVbusDisconnected([]{
+            Log("App VBUS LOW handler, switching to 6MHz");
+            Clock::SetClockMHz(6);
+        });
+        USB::EnablePowerSaveMode();
+        LogNL();
     }
 
     void PowerTest()
