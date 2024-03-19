@@ -5,14 +5,6 @@
 #include "JSONMsgRouter.h"
 
 
-
-inline static void InitSubsystemGps()
-{
-    Pin::Configure(6, Pin::Type::OUTPUT, 0);
-    Pin::Configure(8, Pin::Type::OUTPUT, 0);
-}
-
-
 class SubsystemGps
 {
 public:
@@ -528,7 +520,7 @@ private:
     Pin pinGpsLoadSwitchOnOff_    { 2, Pin::Type::OUTPUT, 1 };
     Pin pinGpsReset_              { 6, Pin::Type::OUTPUT, 0 };
     Pin pinGpsBatteryPowerOnOff_  { 3, Pin::Type::OUTPUT, 1 };
-    Pin pinUart1Tx_               { 8, Pin::Type::OUTPUT, 0 };    // TODO -- necessary?
+    Pin pinUart1Tx_               { 8, Pin::Type::OUTPUT, 0 };
 
     JSONMsgRouter::Iface router_;
 

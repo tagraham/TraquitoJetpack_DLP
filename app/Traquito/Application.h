@@ -15,7 +15,7 @@ using namespace std;
 
 struct TestConfiguration
 {
-    bool enabled = true;
+    bool enabled = false;
 
     bool watchdogOn = true;
     bool logAsync = true;
@@ -30,36 +30,14 @@ TestConfiguration testCfg;
 // special convenience setting to switch to separately-released build
 static const bool API_MODE_BUILD = false;
 
-
-inline static void PowerSave()
-{
-    // 12mA baseline
-    Clock::SetClockMHz(6);
-    Clock::DisableUSB();
-
-    if (testCfg.enabled)
-    {
-        Clock::PrintAll();
-    }
-
-    // saves 5mA at 125MHz
-    // saves 2mA at  48MHz
-    PeripheralControl::DisablePeripheralList({
-        PeripheralControl::SPI1,
-        PeripheralControl::SPI0,
-        PeripheralControl::PWM,
-        PeripheralControl::PIO1,
-        PeripheralControl::PIO0,
-        PeripheralControl::I2C1,
-    });
-}
-
 class Application
 {
 public:
 
     Application()
     {
+        PowerSave();
+
         ReadDeviceTree();
 
         // override for special build
@@ -84,25 +62,7 @@ public:
     {
         Timeline::Global().Event("Application");
 
-        static uint32_t count = 0;
-        static bool show = false;
-        UartAddLineStreamCallback(UART::UART_1, [](const string &line){
-            UartTarget target(UART::UART_0);
-            if (show)
-            {
-                Log(line);
-            }
-            ++count;
-        });
-
-        Shell::AddCommand("count", [this](vector<string> argList){
-            Log(count);
-        }, { .argCount = 0, .help = ""});
-
-        Shell::AddCommand("show", [this](vector<string> argList){
-            show = !show;
-        }, { .argCount = 0, .help = ""});
-
+Debug();
 
         LogNL(2);
         Log("Module Details");
@@ -125,32 +85,8 @@ public:
         // set up blinker
         blinker_.SetPin(pinLedGreen_);
 
-        // Initial blink pattern indicates testing of systems and the
-        // sufficiency of the power source (ie solar).
-
-        // Blink 1 - CPU can run on this power
-        PAL.Delay(1'000);
-        blinker_.Blink(1, 500, 100);
-        Watchdog::Feed();
-
-        // Blink 2 - GPS can run on this power
-        ssGps_.ModulePowerOnBatteryOn();
-        // PAL.Delay(500);  // the power on has a delay of 500 in it already
-        PAL.Delay(500);  // add another 500 for a total of 1 sec
-        blinker_.Blink(1, 500, 100);
-        ssGps_.ModulePowerOff();
-        Watchdog::Feed();
-
-        // Blink 3 - Transmitter can run on this power
-        ssTx_.Enable();
-        ssTx_.RadioOn();
-        PAL.Delay(1'000);
-        blinker_.Blink(1, 500, 100);
-        ssTx_.RadioOff();
-        ssTx_.Disable();
-        Watchdog::Feed();
-
-        Log("Power test blinking sequence complete");
+        // Startup blinks indicate progressively higher power demand
+        PowerTest();
 
         // Set up system elements common between modes
         SetupShell();
@@ -698,6 +634,64 @@ public:
 private:
 
     /////////////////////////////////////////////////////////////////
+    // Power
+    /////////////////////////////////////////////////////////////////
+
+    void PowerSave()
+    {
+        // 12mA baseline
+        Clock::SetClockMHz(6);
+        Clock::DisableUSB();
+
+        if (testCfg.enabled)
+        {
+            Clock::PrintAll();
+        }
+
+        // saves 5mA at 125MHz
+        // saves 2mA at  48MHz
+        PeripheralControl::DisablePeripheralList({
+            PeripheralControl::SPI1,
+            PeripheralControl::SPI0,
+            PeripheralControl::PWM,
+            PeripheralControl::PIO1,
+            PeripheralControl::PIO0,
+            PeripheralControl::I2C1,
+        });
+    }
+
+    void PowerTest()
+    {
+        // Initial blink pattern indicates testing of systems and the
+        // sufficiency of the power source (ie solar).
+
+        // Blink 1 - CPU can run on this power
+        PAL.Delay(1'000);
+        blinker_.Blink(1, 500, 100);
+        Watchdog::Feed();
+
+        // Blink 2 - GPS can run on this power
+        ssGps_.ModulePowerOnBatteryOn();
+        // PAL.Delay(500);  // the power on has a delay of 500 in it already
+        PAL.Delay(500);  // add another 500 for a total of 1 sec
+        blinker_.Blink(1, 500, 100);
+        ssGps_.ModulePowerOff();
+        Watchdog::Feed();
+
+        // Blink 3 - Transmitter can run on this power
+        ssTx_.Enable();
+        ssTx_.RadioOn();
+        PAL.Delay(1'000);
+        blinker_.Blink(1, 500, 100);
+        ssTx_.RadioOff();
+        ssTx_.Disable();
+        Watchdog::Feed();
+
+        Log("Power test blinking sequence complete");
+    }
+
+
+    /////////////////////////////////////////////////////////////////
     // Utility
     /////////////////////////////////////////////////////////////////
 
@@ -737,6 +731,28 @@ private:
         }, "TIMER_APP_SIGNS_OF_LIFE");
 
         tedLed.RegisterForTimedEvent(0);
+    }
+
+    void Debug()
+    {
+        static uint32_t count = 0;
+        static bool show = false;
+        UartAddLineStreamCallback(UART::UART_1, [](const string &line){
+            UartTarget target(UART::UART_0);
+            if (show)
+            {
+                Log(line);
+            }
+            ++count;
+        });
+
+        Shell::AddCommand("count", [this](vector<string> argList){
+            Log(count);
+        }, { .argCount = 0, .help = ""});
+
+        Shell::AddCommand("show", [this](vector<string> argList){
+            show = !show;
+        }, { .argCount = 0, .help = ""});
     }
 
 
