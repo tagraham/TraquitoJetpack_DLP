@@ -9,5 +9,12 @@ set(PROJECT_NAME "Traquito")
 set(APP_BUILD_VERSION "2024-03-19 16:04:22")
 set(PICO_BOARD_ACTUAL "pico")
 
+# Delcare project and executable to CMake
+project(${PROJECT_NAME} C CXX ASM)
+add_executable(${PROJECT_NAME} main.cpp)
+
+# Initialise the Raspberry Pi Pico SDK
+pico_sdk_init()
+
 # Final cmake work
 include(${LIB_PICO}/cmake.app.after.cmake)
