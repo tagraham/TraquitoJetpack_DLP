@@ -6,7 +6,7 @@ include(${LIB_PICO}/cmake.preproject.cmake)
 
 # Primary configuration for this project
 set(PROJECT_NAME "Traquito")
-set(APP_BUILD_VERSION "2024-03-19 16:04:22")
+set(APP_BUILD_VERSION "2024-03-26 16:58:22")
 set(PICO_BOARD_ACTUAL "pico")
 
 # Delcare project and executable to CMake

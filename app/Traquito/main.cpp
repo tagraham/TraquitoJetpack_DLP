@@ -3,9 +3,7 @@
 
 int main()
 {
-    App<Application> app;
-
-    app.Run();
+    App<Application>::Run();
 
     return 0;
 }
