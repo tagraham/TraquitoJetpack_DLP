@@ -6,7 +6,7 @@
         {
             "label": "Reset",
             "type": "shell",
-            "command": "python ../../utl/reset.py",
+            "command": "python ./ext/picoinf/utl/reset.py",
             "problemMatcher": [],
             "dependsOrder": "sequence",
             "presentation": {
@@ -37,29 +37,25 @@
         },
         {
             "label": "Build Clean",
-            //     "type": "cmake",
-            //     "command": "clean",
-            "type": "shell",
-            "command": "\"C:\\Program Files\\CMake\\bin\\cmake.EXE\" --build c:/Users/dougl/git/pico/app/Traquito/build --config Debug --target clean --",
+            "type": "cmake",
+            "command": "clean",
             "problemMatcher": [],
             "detail": "CMake clean"
         },
         {
             "label": "Build No Clear Terminal Actually",
-            //     "type": "cmake",
-            //     "command": "build",
-            //     "targets": [
-            //         "all"
-            //     ],
-            "type": "shell",
-            "command": "\"C:\\Program Files\\CMake\\bin\\cmake.EXE\" --build c:/Users/dougl/git/pico/app/Traquito/build --config Debug --target Traquito --",
+            "type": "cmake",
+            "command": "build",
+            "targets": [
+                "TraquitoJetpack"
+            ],
             "problemMatcher": [],
             "detail": "CMake build",
         },
         {
             "label": "Build No Clear Terminal",
             "type": "shell",
-            "command": "python ../../utl/ElfMapReader.py ./build/Traquito.elf.map",
+            "command": "python ./ext/picoinf/utl/ElfMapReader.py ./build/TraquitoJetpack.elf.map",
             "problemMatcher": [],
             "dependsOrder": "sequence",
             "dependsOn": ["Build No Clear Terminal Actually"],
@@ -74,13 +70,11 @@
         },
         {
             "label": "Build Actually",
-            //     "type": "cmake",
-            //     "command": "build",
-            //     "targets": [
-            //         "all"
-            //     ],
-            "type": "shell",
-            "command": "\"C:\\Program Files\\CMake\\bin\\cmake.EXE\" --build c:/Users/dougl/git/pico/app/Traquito/build --config Debug --target Traquito --",
+            "type": "cmake",
+            "command": "build",
+            "targets": [
+                "TraquitoJetpack"
+            ],
             "presentation": {
                 "echo": true,
                 "reveal": "silent",
@@ -93,7 +87,7 @@
         {
             "label": "Build",
             "type": "shell",
-            "command": "python ../../utl/ElfMapReader.py ./build/Traquito.elf.map",
+            "command": "python ./ext/picoinf/utl/ElfMapReader.py ./build/TraquitoJetpack.elf.map",
             "group": "build",
             "problemMatcher": [],
             "dependsOrder": "sequence",
@@ -116,7 +110,7 @@
         {
             "label": "Flash",
             "type": "shell",
-            "command": "python ../../utl/flash.py ./build/Traquito.elf",
+            "command": "python ./ext/picoinf/utl/flash.py ./build/src/Traquito.elf",
             "problemMatcher": [],
             "dependsOrder": "sequence",
             "dependsOn": ["Build"],
@@ -132,10 +126,9 @@
         {
             "label": "ROM Size Report",
             "type": "shell",
-            "command": "python ../../utl/size_report -k ./build/Traquito.elf -b ../../ -o ./build -v rom > ./build/rom.txt 2>&1",
+            "command": "python ./ext/picoinf/utl/size_report -k ./build/src/TraquitoJetpack.elf -b . -o ./build -v rom > ./build/rom.txt 2>&1",
             "problemMatcher": [],
             "dependsOrder": "sequence",
-            "dependsOn": ["Build"],
             "presentation": {
                 "echo": true,
                 "focus": false,
@@ -148,10 +141,9 @@
         {
             "label": "RAM Size Report",
             "type": "shell",
-            "command": "python ../../utl/size_report -k ./build/Traquito.elf -b ../../ -o ./build -v ram > ./build/ram.txt 2>&1",
+            "command": "python ./ext/picoinf/utl/size_report -k ./build/src/TraquitoJetpack.elf -b . -o ./build -v ram > ./build/ram.txt 2>&1",
             "problemMatcher": [],
             "dependsOrder": "sequence",
-            "dependsOn": ["Build"],
             "presentation": {
                 "echo": true,
                 "focus": false,
