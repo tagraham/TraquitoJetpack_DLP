@@ -1,0 +1,3 @@
+[submodule "ext/picoinf"]
+	path = ext/picoinf
+	url = git@github.com:dmalnati/picoinf.git
