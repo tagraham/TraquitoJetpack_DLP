@@ -4,6 +4,21 @@
 	"version": "2.0.0",
 	"tasks": [
         {
+            "label": "Erase",
+            "type": "shell",
+            "command": "python ./ext/picoinf/utl/erase.py",
+            "problemMatcher": [],
+            "dependsOrder": "sequence",
+            "presentation": {
+                "echo": true,
+                "reveal": "silent",
+                "focus": false,
+                "panel": "shared",
+                "showReuseMessage": true,
+                "clear": false,
+            },
+        },
+        {
             "label": "Reset",
             "type": "shell",
             "command": "python ./ext/picoinf/utl/reset.py",
@@ -110,7 +125,7 @@
         {
             "label": "Flash",
             "type": "shell",
-            "command": "python ./ext/picoinf/utl/flash.py ./build/src/Traquito.elf",
+            "command": "python ./ext/picoinf/utl/flash.py ./build/src/TraquitoJetpack.elf",
             "problemMatcher": [],
             "dependsOrder": "sequence",
             "dependsOn": ["Build"],
