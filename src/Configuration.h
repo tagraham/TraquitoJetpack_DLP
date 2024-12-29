@@ -6,7 +6,7 @@ using namespace std;
 
 #include "Flashable.h"
 #include "JSONMsgRouter.h"
-#include "WSPR.h"
+#include "WsprEncoded.h"
 
 
 class Configuration
@@ -116,7 +116,7 @@ private:
             out["callsign"]   = callsign;
             out["correction"] = correction;
 
-            out["callsignOk"] = WSPR::CallsignIsValid(callsign);
+            out["callsignOk"] = WsprMessageRegularType1::CallsignIsValid(callsign.c_str());
         });
 
         JSONMsgRouter::RegisterHandler("REQ_SET_CONFIG", [this](auto &in, auto &out){
@@ -131,21 +131,21 @@ private:
             string err = "";
             string sep = "";
 
-            if (bandIn != WSPR::GetDefaultBandIfNotValid(bandIn))
+            if (bandIn != Wspr::GetDefaultBandIfNotValid(bandIn.c_str()))
             {
                 ok = false;
                 err += sep + "Invalid band";
                 sep = ", ";
             }
             
-            if (channelIn != WSPR::GetDefaultChannelIfNotValid(channelIn))
+            if (channelIn != WsprChannelMap::GetDefaultChannelIfNotValid(channelIn))
             {
                 ok = false;
                 err += sep + "Invalid channel";
                 sep = ", ";
             }
 
-            if (WSPR::CallsignIsValid(callsignIn) == false)
+            if (WsprMessageRegularType1::CallsignIsValid(callsignIn.c_str()) == false)
             {
                 ok = false;
                 err += sep + "Invalid callsign";

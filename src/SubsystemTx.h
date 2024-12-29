@@ -74,7 +74,7 @@ public:
         // unlike normal flight mode, this:
         // - doesn't restore the saved settings (ephemeral settings used)
         // - uses the dial frequency of the band + 1500 (for calibration simplicity)
-        WSPR::ChannelDetails cd = WSPR::GetChannelDetails(cfg_.band, cfg_.channel);
+        WsprChannelMap::ChannelDetails cd = WsprChannelMap::GetChannelDetails(cfg_.band.c_str(), cfg_.channel);
 
         Log("Setup Transmitter (Calibration mode)");
         Log("Band: ", cfg_.band, ", Channel: ", cfg_.channel);
@@ -90,7 +90,7 @@ public:
         // make sure config is the stored version
         cfg_.Get();
 
-        WSPR::ChannelDetails cd = WSPR::GetChannelDetails(cfg_.band, cfg_.channel);
+        WsprChannelMap::ChannelDetails cd = WsprChannelMap::GetChannelDetails(cfg_.band.c_str(), cfg_.channel);
 
         Log("Setup Transmitter (Flight mode)");
         Log("Band: ", cfg_.band, ", Channel: ", cfg_.channel);

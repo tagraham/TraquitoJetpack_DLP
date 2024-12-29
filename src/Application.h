@@ -271,7 +271,7 @@ public:
             ssTx_.SetupTransmitterForFlight();
 
             Configuration &txCfg = ssTx_.GetConfiguration();
-            auto cd = WSPR::GetChannelDetails(txCfg.band, txCfg.channel);
+            auto cd = WsprChannelMap::GetChannelDetails(txCfg.band.c_str(), txCfg.channel);
 
             Log("==== Ok to fly! ====");
             Log("Callsign  : ", txCfg.callsign);
@@ -342,7 +342,7 @@ public:
 
         // figure out when to wake up to send this fix
         const Configuration &txCfg = ssTx_.GetConfiguration();
-        WSPR::ChannelDetails cd = WSPR::GetChannelDetails(txCfg.band, txCfg.channel);
+        WsprChannelMap::ChannelDetails cd = WsprChannelMap::GetChannelDetails(txCfg.band.c_str(), txCfg.channel);
 
         uint8_t fixMinute = fix_.minute % 10;
 
@@ -535,7 +535,7 @@ public:
         Log("RTC Now: ", MsToMinutesStr(PAL.Millis()));
 
         // get data needed to fill out encoded message
-        WSPR::ChannelDetails cd = WSPR::GetChannelDetails(txCfg.band, txCfg.channel);
+        WsprChannelMap::ChannelDetails cd = WsprChannelMap::GetChannelDetails(txCfg.band.c_str(), txCfg.channel);
 
         string   grid56    = fix_.maidenheadGrid.substr(4, 2);
         uint32_t altM      = fix_.altitudeM < 0 ? 0 : fix_.altitudeM;
