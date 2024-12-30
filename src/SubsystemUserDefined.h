@@ -15,36 +15,52 @@ public:
 
     SubsystemUserDefined()
     {
-        SetupSlots();
         SetupShell();
         SetupJSON();
     }
 
 private:
 
-    void SetupSlots()
+    string GetFieldDef(const string &slotName)
     {
-        for (int i = 0; i < 5; ++i)
-        {
-            string fileName = string{"slot"} + to_string(i) + ".js";
+        string fileName = slotName + ".json";
 
-            if (FilesystemLittleFS::FileExists(fileName) == false)
-            {
-                auto f = FilesystemLittleFS::GetFile(fileName);
+        string retVal = FilesystemLittleFS::Read(fileName);
 
-                if (f.Open())
-                {
-                    string data;
-                    data += "print(`I am slot";
-                    data += to_string(i);
-                    data += "`);";
+        return retVal;
+    }
 
-                    f.Write(data);
+    bool SetFieldDef(const string &slotName, const string &fieldDef)
+    {
+        bool retVal = false;
 
-                    f.Close();
-                }
-            }
-        }
+        string fileName = slotName + ".json";
+
+        FilesystemLittleFS::Remove(fileName);
+        retVal = FilesystemLittleFS::Write(fileName, fieldDef);
+
+        return retVal;
+    }
+
+    string GetJavaScript(const string &slotName)
+    {
+        string fileName = slotName + ".js";
+
+        string retVal = FilesystemLittleFS::Read(fileName);
+
+        return retVal;
+    }
+    
+    bool SetJavaScript(const string &slotName, const string &script)
+    {
+        bool retVal = false;
+
+        string fileName = slotName + ".js";
+
+        FilesystemLittleFS::Remove(fileName);
+        retVal = FilesystemLittleFS::Write(fileName, script);
+
+        return retVal;
     }
 
     void ShowMessage(MsgUD &msg)
@@ -105,28 +121,79 @@ private:
 
     void SetupJSON()
     {
-        JSONMsgRouter::RegisterHandler("REQ_JS_PARSE", [this](auto &in, auto &out){
+        JSONMsgRouter::RegisterHandler("REQ_GET_FIELD_DEF", [this](auto &in, auto &out){
+            string name = (const char *)in["name"];
+
+            Log("REQ_GET_FIELD_DEF for ", name);
+
+            string fieldDef = GetFieldDef(name);
+
+            out["type"]     = "REP_GET_FIELD_DEF";
+            out["name"]     = name;
+            out["fieldDef"] = fieldDef;
+        });
+
+        JSONMsgRouter::RegisterHandler("REQ_SET_FIELD_DEF", [this](auto &in, auto &out){
+            string name     = (const char *)in["name"];
+            string fieldDef = (const char *)in["fieldDef"];
+
+            Log("REQ_SET_FIELD_DEF for ", name);
+            Log(fieldDef);
+
+            bool ok = SetFieldDef(name, fieldDef);
+
+            out["type"] = "REP_SET_FIELD_DEF";
+            out["name"] = name;
+            out["ok"]   = ok;
+        });
+
+        JSONMsgRouter::RegisterHandler("REQ_GET_JS", [this](auto &in, auto &out){
+            string name = (const char *)in["name"];
+
+            Log("REQ_GET_JS for ", name);
+
+            string script = GetJavaScript(name);
+
+            out["type"]   = "REP_GET_JS";
+            out["name"]   = name;
+            out["script"] = script;
+        });
+
+        JSONMsgRouter::RegisterHandler("REQ_SET_JS", [this](auto &in, auto &out){
+            string name   = (const char *)in["name"];
+            string script = (const char *)in["script"];
+
+            Log("REQ_SET_JS for ", name);
+            Log(script);
+
+            bool ok = SetJavaScript(name, script);
+
+            out["type"] = "REP_SET_JS";
+            out["name"] = name;
+            out["ok"]   = ok;
+        });
+
+        JSONMsgRouter::RegisterHandler("REQ_PARSE_JS", [this](auto &in, auto &out){
             string script = (const char *)in["script"];
 
             Log("Parsing script");
             Log(script);
 
-            uint64_t timeDiffMs = 0;
-            string ret;
+            string err;
             JerryScript::UseVM([&]{
                 uint64_t timeStart = PAL.Millis();
-                ret = JerryScript::ParseScript(script);
-                timeDiffMs = PAL.Millis() - timeStart;
+                err = JerryScript::ParseScript(script);
             });
 
-            Log("Return: ", ret);
+            Log("Return: ", err);
 
-            bool ok = ret == "";
+            bool ok = err == "";
 
-            out["type"] = "REP_JS_PARSE";
-            out["ok"]   = ok;
-            out["err"]  = ret;
-            out["parseMs"] = timeDiffMs;
+            out["type"]    = "REP_PARSE_JS";
+            out["ok"]      = ok;
+            out["err"]     = err;
+            out["parseMs"] = JerryScript::GetScriptParseDurationMs();
+            out["vmOverheadMs"]   = JerryScript::GetVMOverheadDurationMs();
         });
     }
 
