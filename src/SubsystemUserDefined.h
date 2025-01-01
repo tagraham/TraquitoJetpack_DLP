@@ -53,18 +53,14 @@ private:
 
     bool SetAndApplyFieldDef(const string &slotName, const string &fieldDef)
     {
-        bool retVal = SetFieldDef(slotName, fieldDef);
+        bool retVal = false;
 
-        if (retVal)
+        MsgState *msgState = GetMsgStateBySlotName(slotName);
+        if (msgState)
         {
-            MsgState *msgState = GetMsgStateBySlotName(slotName);
-            if (msgState)
+            if (SetFieldDef(slotName, fieldDef))
             {
-                ConfigureUserDefinedMessageFromFieldDef(*msgState, fieldDef);
-            }
-            else
-            {
-                retVal = false;
+                retVal = ConfigureUserDefinedMessageFromFieldDef(*msgState, fieldDef);
             }
         }
 
@@ -329,6 +325,15 @@ private:
             MsgState *msgState = GetMsgStateBySlotName(slotName);
             if (msgState)
             {
+                // one-time pre-allocate state memory to avoid reallocation later on.
+                //
+                // previously, as fields were added to the vector, the vector
+                // would grow and reallocate, causing some of the stored strings
+                // to be re-created, invalidating the pointers held by the message
+                // and ultimately messing things up.
+                msgState->fieldList.reserve(29);
+
+                // pull stored field def and configure
                 string fieldDef = GetFieldDef(slotName);
 
                 Log("Configuring slot ", slotName);
@@ -441,8 +446,6 @@ private:
         return retVal;
     }
 
-
-
     MsgState *GetMsgStateBySlotName(string slotName)
     {
         MsgState *msgState = nullptr;
@@ -459,7 +462,9 @@ private:
 
 private:
 
-
+    // keep memory off of the main stack to avoid needing to
+    // size the stack itself to a large size that every app
+    // would have to tune
     inline static MsgState msgStateSlot0_;
     inline static MsgState msgStateSlot1_;
     inline static MsgState msgStateSlot2_;
