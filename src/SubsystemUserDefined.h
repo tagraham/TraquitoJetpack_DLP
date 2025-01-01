@@ -32,7 +32,219 @@ public:
         SetupUserDefinedMessages();
     }
 
+
 private:
+
+    /////////////////////////////////////////////////////////////////
+    // Application Logic
+    /////////////////////////////////////////////////////////////////
+
+    void SetupUserDefinedMessages()
+    {
+        for (uint8_t slot = 0; slot < 5; ++slot)
+        {
+            string slotName = "slot" + to_string(slot);
+
+            MsgState *msgState = GetMsgStateBySlotName(slotName);
+            if (msgState)
+            {
+                // one-time pre-allocate state memory to avoid reallocation later on.
+                //
+                // previously, as fields were added to the vector, the vector
+                // would grow and reallocate, causing some of the stored strings
+                // to be re-created, invalidating the pointers held by the message
+                // and ultimately messing things up.
+                msgState->fieldList.reserve(29);
+
+                // pull stored field def and configure
+                string fieldDef = GetFieldDef(slotName);
+
+                Log("Configuring ", slotName);
+                ConfigureUserDefinedMessageFromFieldDef(*msgState, fieldDef);
+                LogNL();
+                Log("Message state:");
+                Log(GetMsgStateAsString(*msgState));
+                LogNL();
+                LogNL();
+            }
+        }
+    }
+
+    static bool ConfigureUserDefinedMessageFromFieldDef(MsgState &msgState, const string &fieldDef)
+    {
+        bool retVal = false;
+
+        MsgUD          &msg       = msgState.msg;
+        vector<string> &fieldList = msgState.fieldList;
+
+        msg.ResetEverything();
+        fieldList.clear();
+
+        string jsonStr;
+        jsonStr += "{ \"fieldDefList\": [";
+        jsonStr += "\n";
+        jsonStr += SanitizeFieldDef(fieldDef);
+        jsonStr += "\n";
+        jsonStr += "] }";
+
+        Log("JSON:");
+        Log(jsonStr);
+
+        JSON::UseJSON(jsonStr, [&](auto &json){
+            retVal = true;
+
+            JsonArray jsonFieldDefList = json["fieldDefList"];
+            for (auto jsonFieldDef : jsonFieldDefList)
+            {
+                // ensure keys exist
+                vector<const char *> keyList = { "name", "unit", "lowValue", "highValue", "stepSize" };
+                if (JSON::HasKeyList(jsonFieldDef, keyList))
+                {
+                    // extract fields
+                    string name      = (const char *)jsonFieldDef["name"];
+                    string unit      = (const char *)jsonFieldDef["unit"];
+                    double lowValue  = (double)jsonFieldDef["lowValue"];
+                    double highValue = (double)jsonFieldDef["highValue"];
+                    double stepSize  = (double)jsonFieldDef["stepSize"];
+
+                    fieldList.push_back(name + unit);
+                    const string &fieldName = fieldList[fieldList.size() - 1];
+
+                    Log("Defining ", fieldName);
+                    if (msg.DefineField(fieldName.c_str(), lowValue, highValue, stepSize) == false)
+                    {
+                        retVal = false;
+
+                        string line = string{"name: "} + name + ", " + "unit: " + unit + ", " + "lowValue: " + to_string(lowValue) + ", " + "highValue: " + to_string(highValue) + ", " + "stepSize: " + to_string(stepSize) + ", ";
+
+                        Log("Failed to define field:");
+                        Log("- field: ", fieldName);
+                        Log("- line : ", line);
+                        Log("- err  : ", msg.GetDefineFieldErr());
+                    }
+                }
+                else
+                {
+                    retVal = false;
+
+                    Log("Field definition missing keys");
+                }
+            }
+        });
+
+        return retVal;
+    }
+
+
+    /////////////////////////////////////////////////////////////////
+    // JSON Utility Functions
+    /////////////////////////////////////////////////////////////////
+
+    static string SanitizeFieldDef(const string &jsonStr)
+    {
+        string retVal;
+
+        vector<string> lineList = Split(jsonStr, "\n");
+
+        string sep = "";
+        for (int i = 0; i < lineList.size(); ++i)
+        {
+            string &line = lineList[i];
+
+            if (line.size() >= 2)
+            {
+                if (line[0] == '/' && line[1] == '/')
+                {
+                    // ignore
+                }
+                else
+                {
+                    if (i == lineList.size() - 1)
+                    {
+                        // strip trailing comma from last line
+                        line[line.size() - 1] = ' ';
+                    }
+
+                    retVal += sep + line;
+
+                    sep = "\n";
+                }
+            }
+        }
+
+        return retVal;
+    }
+
+
+    /////////////////////////////////////////////////////////////////
+    // Message State Functions
+    /////////////////////////////////////////////////////////////////
+
+    MsgState *GetMsgStateBySlotName(string slotName)
+    {
+        MsgState *msgState = nullptr;
+
+             if (slotName == "slot0") { msgState = &msgStateSlot0_; }
+        else if (slotName == "slot1") { msgState = &msgStateSlot1_; }
+        else if (slotName == "slot2") { msgState = &msgStateSlot2_; }
+        else if (slotName == "slot3") { msgState = &msgStateSlot3_; }
+        else if (slotName == "slot4") { msgState = &msgStateSlot4_; }
+        
+        return msgState;
+    }
+
+    string GetMsgStateAsString(MsgState &msgState)
+    {
+        string retVal;
+
+        MsgUD          &msg       = msgState.msg;
+        vector<string> &fieldList = msgState.fieldList;
+
+        // first pass to figure out string lengths
+        size_t maxLen = 0;
+        size_t overhead = 9;
+        for (const auto &fieldName : fieldList)
+        {
+            maxLen = max(maxLen, (fieldName.length() + overhead));
+        }
+
+        // second pass to format
+        string sep = "";
+        for (const auto &fieldName : fieldList)
+        {
+            double value = msg.Get(fieldName.c_str());
+
+            string line;
+            line += "msg.Get";
+            line += fieldName;
+            line += "()";
+            line = StrUtl::PadRight(line, ' ', maxLen);
+
+            line += " == ";
+
+            // keep the value good looking
+            if (value == (int)value)
+            {
+                line += to_string((int)value);
+            }
+            else
+            {
+                line += FloatToString(value, 3);
+            }
+
+            retVal += sep;
+            retVal += line;
+
+            sep = "\n";
+        }
+
+        return retVal;
+    }
+
+
+    /////////////////////////////////////////////////////////////////
+    // Flash storage and retrieval
+    /////////////////////////////////////////////////////////////////
 
     string GetFieldDef(const string &slotName)
     {
@@ -51,22 +263,6 @@ private:
 
         FilesystemLittleFS::Remove(fileName);
         retVal = FilesystemLittleFS::Write(fileName, fieldDef);
-
-        return retVal;
-    }
-
-    bool SetAndApplyFieldDef(const string &slotName, const string &fieldDef)
-    {
-        bool retVal = false;
-
-        MsgState *msgState = GetMsgStateBySlotName(slotName);
-        if (msgState)
-        {
-            if (SetFieldDef(slotName, fieldDef))
-            {
-                retVal = ConfigureUserDefinedMessageFromFieldDef(*msgState, fieldDef);
-            }
-        }
 
         return retVal;
     }
@@ -92,109 +288,13 @@ private:
         return retVal;
     }
 
-    string GetMessageStateString(MsgState &msgState)
-    {
-        string retVal;
 
-        MsgUD          &msg       = msgState.msg;
-        vector<string> &fieldList = msgState.fieldList;
-
-
-        // first pass to figure out string lengths
-        size_t maxLen = 0;
-        size_t overhead = 9;
-        for (const auto &fieldName : fieldList)
-        {
-            maxLen = max(maxLen, (fieldName.length() + overhead));
-        }
-
-        // second pass to format
-        string sep = "";
-        for (const auto &fieldName : fieldList)
-        {
-            double value = msg.Get(fieldName.c_str());
-
-            string line;
-            line += "msg.Get";
-            line += fieldName;
-            line += "()";
-            line = StrUtl::PadRight(line, ' ', maxLen);
-
-            line += " = ";
-
-            // keep the value good looking
-            if (value == (int)value)
-            {
-                line += to_string((int)value);
-            }
-            else
-            {
-                line += FloatToString(value, 3);
-            }
-
-            retVal += sep;
-            retVal += line;
-
-            sep = "\n";
-        }
-
-        return retVal;
-    }
-
-    void ShowMessage(MsgUD &msg)
-    {
-        auto     &fieldDefList    = msg.GetFieldDefList();
-        uint16_t  fieldDefListLen = msg.GetFieldDefListLen();
-
-        Log("Field count: ", fieldDefListLen);
-
-        for (int i = 0; i < fieldDefListLen; ++i)
-        {
-            const auto &fieldDef = fieldDefList[i];
-
-            Log(fieldDef.name, "(", fieldDef.value, "): ", fieldDef.lowValue, ", ", fieldDef.highValue, ", ", fieldDef.stepSize);
-        }
-    }
-
-    void ShowJavaScript(uint8_t slot)
-    {
-        string fileName = string{"slot"} + to_string(slot) + ".js";
-
-        string script = FilesystemLittleFS::Read(fileName);
-
-        Log("Script:");
-        Log(script);
-    }
+    /////////////////////////////////////////////////////////////////
+    // Shell and JSON setup
+    /////////////////////////////////////////////////////////////////
 
     void SetupShell()
     {
-        Shell::AddCommand("app.ss.ud.show", [this](vector<string> argList){
-            vector<MsgState *> msgStateList = {
-                &msgStateSlot0_,
-                &msgStateSlot1_,
-                &msgStateSlot2_,
-                &msgStateSlot3_,
-                &msgStateSlot4_,
-            };
-
-            string sep;
-            for (int i = 0; auto msgState : msgStateList)
-            {
-                LogNNL(sep);
-                Log("Slot", i, ":");
-                ShowMessage(msgState->msg);
-
-                LogNL();
-
-                ShowJavaScript(i);
-
-                LogNL();
-
-                sep = "\n";
-
-                ++i;
-            }
-        }, { .argCount = 0, .help = "subsystem user defined show"});
     }
 
     void SetupJSON()
@@ -218,7 +318,15 @@ private:
             Log("REQ_SET_FIELD_DEF for ", name);
             // Log(fieldDef);
 
-            bool ok = SetAndApplyFieldDef(name, fieldDef);
+            bool ok = false;
+            MsgState *msgState = GetMsgStateBySlotName(name);
+            if (msgState)
+            {
+                if (SetFieldDef(name, fieldDef))
+                {
+                    ok = ConfigureUserDefinedMessageFromFieldDef(*msgState, fieldDef);
+                }
+            }
 
             out["type"] = "REP_SET_FIELD_DEF";
             out["name"] = name;
@@ -313,7 +421,7 @@ private:
                         runMs     = JerryScript::GetScriptRunDurationMs();
                         runOutput = JerryScript::GetScriptOutput();
 
-                        msgStateStr = GetMessageStateString(*msgState);
+                        msgStateStr = GetMsgStateAsString(*msgState);
                     }
                 });
 
@@ -340,150 +448,6 @@ private:
             out["runOutput"]  = runOutput;
             out["msgState"]   = msgStateStr;
         });
-    }
-
-    void SetupUserDefinedMessages()
-    {
-        for (uint8_t slot = 0; slot < 5; ++slot)
-        {
-            string slotName = "slot" + to_string(slot);
-
-            MsgState *msgState = GetMsgStateBySlotName(slotName);
-            if (msgState)
-            {
-                // one-time pre-allocate state memory to avoid reallocation later on.
-                //
-                // previously, as fields were added to the vector, the vector
-                // would grow and reallocate, causing some of the stored strings
-                // to be re-created, invalidating the pointers held by the message
-                // and ultimately messing things up.
-                msgState->fieldList.reserve(29);
-
-                // pull stored field def and configure
-                string fieldDef = GetFieldDef(slotName);
-
-                Log("Configuring ", slotName);
-                ConfigureUserDefinedMessageFromFieldDef(*msgState, fieldDef);
-                LogNL();
-                Log("Message state:");
-                Log(GetMessageStateString(*msgState));
-                LogNL();
-                LogNL();
-            }
-        }
-    }
-
-    static bool ConfigureUserDefinedMessageFromFieldDef(MsgState &msgState, const string &fieldDef)
-    {
-        bool retVal = false;
-
-        MsgUD          &msg       = msgState.msg;
-        vector<string> &fieldList = msgState.fieldList;
-
-        msg.ResetEverything();
-        fieldList.clear();
-
-        string jsonStr;
-        jsonStr += "{ \"fieldDefList\": [";
-        jsonStr += "\n";
-        jsonStr += SanitizeFieldDef(fieldDef);
-        jsonStr += "\n";
-        jsonStr += "] }";
-
-        Log("JSON:");
-        Log(jsonStr);
-
-        JSON::UseJSON(jsonStr, [&](auto &json){
-            retVal = true;
-
-            JsonArray jsonFieldDefList = json["fieldDefList"];
-            for (auto jsonFieldDef : jsonFieldDefList)
-            {
-                // ensure keys exist
-                vector<const char *> keyList = { "name", "unit", "lowValue", "highValue", "stepSize" };
-                if (JSON::HasKeyList(jsonFieldDef, keyList))
-                {
-                    // extract fields
-                    string name      = (const char *)jsonFieldDef["name"];
-                    string unit      = (const char *)jsonFieldDef["unit"];
-                    double lowValue  = (double)jsonFieldDef["lowValue"];
-                    double highValue = (double)jsonFieldDef["highValue"];
-                    double stepSize  = (double)jsonFieldDef["stepSize"];
-
-                    fieldList.push_back(name + unit);
-                    const string &fieldName = fieldList[fieldList.size() - 1];
-
-                    Log("Defining ", fieldName);
-                    if (msg.DefineField(fieldName.c_str(), lowValue, highValue, stepSize) == false)
-                    {
-                        retVal = false;
-
-                        string line = string{"name: "} + name + ", " + "unit: " + unit + ", " + "lowValue: " + to_string(lowValue) + ", " + "highValue: " + to_string(highValue) + ", " + "stepSize: " + to_string(stepSize) + ", ";
-
-                        Log("Failed to define field:");
-                        Log("- field: ", fieldName);
-                        Log("- line : ", line);
-                        Log("- err  : ", msg.GetDefineFieldErr());
-                    }
-                }
-                else
-                {
-                    retVal = false;
-
-                    Log("Field definition missing keys");
-                }
-            }
-        });
-
-        return retVal;
-    }
-
-    static string SanitizeFieldDef(const string &jsonStr)
-    {
-        string retVal;
-
-        vector<string> lineList = Split(jsonStr, "\n");
-
-        string sep = "";
-        for (int i = 0; i < lineList.size(); ++i)
-        {
-            string &line = lineList[i];
-
-            if (line.size() >= 2)
-            {
-                if (line[0] == '/' && line[1] == '/')
-                {
-                    // ignore
-                }
-                else
-                {
-                    if (i == lineList.size() - 1)
-                    {
-                        // strip trailing comma from last line
-                        line[line.size() - 1] = ' ';
-                    }
-
-                    retVal += sep + line;
-
-                    sep = "\n";
-                }
-            }
-        }
-
-        return retVal;
-    }
-
-    MsgState *GetMsgStateBySlotName(string slotName)
-    {
-        MsgState *msgState = nullptr;
-
-             if (slotName == "slot0") { msgState = &msgStateSlot0_; }
-        else if (slotName == "slot1") { msgState = &msgStateSlot1_; }
-        else if (slotName == "slot2") { msgState = &msgStateSlot2_; }
-        else if (slotName == "slot3") { msgState = &msgStateSlot3_; }
-        else if (slotName == "slot4") { msgState = &msgStateSlot4_; }
-        
-        return msgState;
     }
 
 
