@@ -7,6 +7,7 @@ using namespace std;
 #include "JerryScriptIntegration.h"
 #include "JSON.h"
 #include "JSONMsgRouter.h"
+#include "JSProxy_GPS.h"
 #include "Shell.h"
 #include "Utl.h"
 #include "WsprEncoded.h"
@@ -144,10 +145,26 @@ private:
     // assumes the VM is running
     static void LoadJavaScriptBindings(MsgUD *msg)
     {
+        // message accessor
         JerryScript::UseThenFree(jerry_object(), [&](auto obj){
             JerryScript::SetGlobalPropertyNoFree("msg", obj);
 
             WsprMessageTelemetryExtendedUserDefined_JSProxy::Proxy(obj, msg);
+        });
+
+        // gps fix accessor
+        JerryScript::UseThenFree(jerry_object(), [&](auto obj){
+            JerryScript::SetGlobalPropertyNoFree("gps", obj);
+
+            // reset
+            static Fix3DPlus gpsFix;
+            gpsFix = Fix3DPlus{};
+
+            gpsFix.latDegMillionths = 12345678;
+            gpsFix.lngDegMillionths = 87654321;
+            gpsFix.altitudeM = 1234;
+
+            JSProxy_GPS::Proxy(obj, &gpsFix);
         });
     }
 
@@ -521,5 +538,4 @@ private:
     inline static MsgState msgStateSlot2_;
     inline static MsgState msgStateSlot3_;
     inline static MsgState msgStateSlot4_;
-
 };
