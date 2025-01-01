@@ -63,7 +63,7 @@ public:
 
     bool Get()
     {
-        bool retVal = flashState_.Get();
+        bool retVal = flashState_.Get(true);
 
         // the storage values are a write-through cache.
         // don't read from them unless you know you've written to them first
