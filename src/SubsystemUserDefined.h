@@ -1,10 +1,14 @@
 #pragma once
 
+#include <algorithm>
+using namespace std;
+
 #include "FilesystemLittleFS.h"
 #include "JerryScriptIntegration.h"
 #include "JSON.h"
 #include "JSONMsgRouter.h"
 #include "Shell.h"
+#include "Utl.h"
 #include "WsprEncoded.h"
 
 
@@ -95,22 +99,44 @@ private:
         MsgUD          &msg       = msgState.msg;
         vector<string> &fieldList = msgState.fieldList;
 
+
+        // first pass to figure out string lengths
+        size_t maxLen = 0;
+        size_t overhead = 9;
+        for (const auto &fieldName : fieldList)
+        {
+            maxLen = max(maxLen, (fieldName.length() + overhead));
+        }
+
+        // second pass to format
         string sep = "";
         for (const auto &fieldName : fieldList)
         {
             double value = msg.Get(fieldName.c_str());
 
+            string line;
+            line += "msg.Get";
+            line += fieldName;
+            line += "()";
+            line = StrUtl::PadRight(line, ' ', maxLen);
+
+            line += " = ";
+
+            // keep the value good looking
+            if (value == (int)value)
+            {
+                line += to_string((int)value);
+            }
+            else
+            {
+                line += FloatToString(value, 3);
+            }
+
             retVal += sep;
-            retVal += "msg.Get";
-            retVal += fieldName;
-            retVal += "() = ";
-            retVal += to_string(value);
+            retVal += line;
 
             sep = "\n";
         }
-
-        Log("Doing ShowMessage while doing string state");
-        ShowMessage(msg);
 
         return retVal;
     }
@@ -336,8 +362,13 @@ private:
                 // pull stored field def and configure
                 string fieldDef = GetFieldDef(slotName);
 
-                Log("Configuring slot ", slotName);
+                Log("Configuring ", slotName);
                 ConfigureUserDefinedMessageFromFieldDef(*msgState, fieldDef);
+                LogNL();
+                Log("Message state:");
+                Log(GetMessageStateString(*msgState));
+                LogNL();
+                LogNL();
             }
         }
     }
@@ -358,8 +389,10 @@ private:
         jsonStr += SanitizeFieldDef(fieldDef);
         jsonStr += "\n";
         jsonStr += "] }";
-        Log("ToJSON");
+
+        Log("JSON:");
         Log(jsonStr);
+
         JSON::UseJSON(jsonStr, [&](auto &json){
             retVal = true;
 
@@ -377,26 +410,20 @@ private:
                     double highValue = (double)jsonFieldDef["highValue"];
                     double stepSize  = (double)jsonFieldDef["stepSize"];
 
-                    string line;
-                    line += "name: " + name + ", " + "unit: " + unit + ", " + "lowValue: " + to_string(lowValue) + ", " + "highValue: " + to_string(highValue) + ", " + "stepSize: " + to_string(stepSize) + ", ";
-                    Log(line);
-
                     fieldList.push_back(name + unit);
                     const string &fieldName = fieldList[fieldList.size() - 1];
 
+                    Log("Defining ", fieldName);
                     if (msg.DefineField(fieldName.c_str(), lowValue, highValue, stepSize) == false)
                     {
                         retVal = false;
+
+                        string line = string{"name: "} + name + ", " + "unit: " + unit + ", " + "lowValue: " + to_string(lowValue) + ", " + "highValue: " + to_string(highValue) + ", " + "stepSize: " + to_string(stepSize) + ", ";
 
                         Log("Failed to define field:");
                         Log("- field: ", fieldName);
                         Log("- line : ", line);
                         Log("- err  : ", msg.GetDefineFieldErr());
-                    }
-                    else
-                    {
-                        Log("Succeeded in defining field ", fieldName);
-                        Log("Value: ", msg.Get(fieldName.c_str()));
                     }
                 }
                 else
