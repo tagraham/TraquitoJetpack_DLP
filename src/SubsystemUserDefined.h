@@ -165,11 +165,7 @@ private:
 
             // reset
             static Fix3DPlus gpsFix;
-            gpsFix = Fix3DPlus{};
-
-            gpsFix.latDegMillionths = 12345678;
-            gpsFix.lngDegMillionths = 87654321;
-            gpsFix.altitudeM = 1234;
+            gpsFix = GPSReader::GetFix3DPlusExample();
 
             JSProxy_GPS::Proxy(obj, &gpsFix);
         });
