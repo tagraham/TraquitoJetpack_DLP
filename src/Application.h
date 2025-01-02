@@ -17,6 +17,8 @@ struct TestConfiguration
 {
     bool enabled = false;
 
+    bool fastStartEvmOnly = false;
+
     bool watchdogOn = true;
     bool logAsync = true;
     bool evmOnly = false;
@@ -51,7 +53,14 @@ public:
 
     Application()
     {
-        PowerSave();
+        if (testCfg.enabled && testCfg.fastStartEvmOnly)
+        {
+            // do nothing
+        }
+        else
+        {
+            PowerSave();
+        }
 
         // override for special build
         testCfg = !API_MODE_BUILD ? testCfg : TestConfiguration{
@@ -73,6 +82,15 @@ public:
 
     void Run()
     {
+        if (testCfg.enabled && testCfg.fastStartEvmOnly)
+        {
+            SetupShell();
+            SetupJSON();
+
+            Log("Main Loop Only");
+            return;
+        }
+
         Timeline::Global().Event("Application");
 
         LogNL(2);
