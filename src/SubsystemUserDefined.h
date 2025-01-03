@@ -13,6 +13,7 @@ using namespace std;
 #include "JSProxy_GPS.h"
 #include "JSProxy_WsprMessageTelemetryExtendedUserDefined.h"
 #include "Shell.h"
+#include "TempSensorInternal.h"
 #include "Utl.h"
 #include "WsprEncoded.h"
 
@@ -159,7 +160,6 @@ private:
         JerryScript::UseThenFreeNewObj([&](auto obj){
             JerryScript::SetGlobalPropertyNoFree("gps", obj);
 
-            // reset
             static Fix3DPlus gpsFix;
             gpsFix = GPSReader::GetFix3DPlusExample();
 
@@ -179,7 +179,19 @@ private:
         JSObj_ADC::Register();
 
         // SYS API
+        JerryScript::UseThenFreeNewObj([&](auto obj){
+            JerryScript::SetGlobalPropertyNoFree("sys", obj);
 
+            JerryScript::SetPropertyToBareFunction(obj, "GetTemperatureFahrenheit", []{
+                return TempSensorInternal::GetTempF();
+            });
+            JerryScript::SetPropertyToBareFunction(obj, "GetTemperatureCelsisus", []{
+                return TempSensorInternal::GetTempC();
+            });
+            JerryScript::SetPropertyToBareFunction(obj, "GetInputVoltageVolts", []{
+                return (double)ADC::GetMilliVoltsVCC() / 1'000;
+            });
+        });
 
         // Basic Functions API
         JerryScript::SetGlobalPropertyToBareFunction("DelayMs", [](uint32_t arg){
