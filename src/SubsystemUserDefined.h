@@ -197,7 +197,6 @@ private:
         JerryScript::SetGlobalPropertyToBareFunction("DelayMs", [](uint32_t arg){
             PAL.Delay(arg);
         });
-
     }
 
     struct JavaScriptRunResult
