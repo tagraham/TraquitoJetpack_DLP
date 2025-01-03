@@ -7,6 +7,7 @@ using namespace std;
 #include "JerryScriptIntegration.h"
 #include "JSON.h"
 #include "JSONMsgRouter.h"
+#include "JSObj_ADC.h"
 #include "JSObj_I2C.h"
 #include "JSObj_Pin.h"
 #include "JSProxy_GPS.h"
@@ -174,7 +175,8 @@ private:
         JSObj_Pin::Register();
 
         // ADC API
-
+        JSObj_ADC::SetPinWhitelist({ 26, 27 });
+        JSObj_ADC::Register();
 
         // SYS API
 
