@@ -10,7 +10,8 @@
             "servertype": "jlink",
             "cwd": "${workspaceRoot}",
             "executable": "${command:cmake.launchTargetPath}",
-            "armToolchainPath": "${env:PICO_TOOLCHAIN_PATH}",
+            // "armToolchainPath": "${env:PICO_TOOLCHAIN_PATH}",
+            "armToolchainPath": "C:\\Program Files (x86)\\Arm GNU Toolchain arm-none-eabi\\12.2 mpacbti-rel1\\bin",
             "device": "RP2040_M0_0",
             "interface": "swd",
             "runToEntryPoint": "main",
@@ -21,7 +22,7 @@
             "postRestartCommands": [],
             "postResetCommands": [],
             "rtos": "FreeRTOS",
-            "svdFile": "${env:PICO_SDK_PATH}/src/rp2040/hardware_regs/rp2040.svd",
+            "svdFile": "${workspaceFolder}ext/picoinf/ext/pico-sdk/src/rp2040/hardware_regs/rp2040.svd",
             "rttConfig": {
                 "enabled": false,
                 "address": "auto",
@@ -42,7 +43,8 @@
             "servertype": "jlink",
             "cwd": "${workspaceRoot}",
             "executable": "${command:cmake.launchTargetPath}",
-            "armToolchainPath": "${env:PICO_TOOLCHAIN_PATH}",
+            // "armToolchainPath": "${env:PICO_TOOLCHAIN_PATH}",
+            "armToolchainPath": "C:\\Program Files (x86)\\Arm GNU Toolchain arm-none-eabi\\12.2 mpacbti-rel1\\bin",
             "device": "RP2040_M0_0",
             "interface": "swd",
             "postAttachCommands": [
@@ -51,7 +53,7 @@
             "postRestartCommands": [],
             "postResetCommands": [],
             "rtos": "FreeRTOS",
-            "svdFile": "${env:PICO_SDK_PATH}/src/rp2040/hardware_regs/rp2040.svd",
+            "svdFile": "${workspaceFolder}ext/picoinf/ext/pico-sdk/src/rp2040/hardware_regs/rp2040.svd",
             "rttConfig": {
                 "enabled": false,
                 "address": "auto",
