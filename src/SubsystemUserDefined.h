@@ -10,6 +10,7 @@ using namespace std;
 #include "JSObj_ADC.h"
 #include "JSObj_BH1750.h"
 #include "JSObj_BME280.h"
+#include "JSObj_BMP280.h"
 #include "JSObj_I2C.h"
 #include "JSObj_Pin.h"
 #include "JSProxy_GPS.h"
@@ -225,6 +226,10 @@ private:
         // BME280 Sensor API
         JSObj_BME280::SetI2CInstance(I2C::Instance::I2C1);
         JSObj_BME280::Register();
+
+        // BMP280 Sensor API
+        JSObj_BMP280::SetI2CInstance(I2C::Instance::I2C1);
+        JSObj_BMP280::Register();
     }
 
     struct JavaScriptRunResult
