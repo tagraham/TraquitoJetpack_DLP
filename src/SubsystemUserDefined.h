@@ -8,6 +8,7 @@ using namespace std;
 #include "JSON.h"
 #include "JSONMsgRouter.h"
 #include "JSObj_ADC.h"
+#include "JSObj_BH1750.h"
 #include "JSObj_I2C.h"
 #include "JSObj_Pin.h"
 #include "JSProxy_GPS.h"
@@ -36,6 +37,8 @@ public:
         SetupShell();
         SetupJSON();
         SetupUserDefinedMessages();
+        SetupJavaScript();
+        LogNL();
     }
 
 
@@ -74,6 +77,22 @@ private:
                 LogNL();
             }
         }
+    }
+
+    void SetupJavaScript()
+    {
+        // get a baseline reading of how much resource usage the VM and bindings
+        // takes so that users can be told how much of the remaining capacity
+        // their script uses
+        auto retVal = RunSlotJavaScript("slot0", "");
+
+        runMemUsedBaseline_ = retVal.runMemUsed;
+
+        int pctUse = runMemUsedBaseline_ * 100 / retVal.runMemAvail;
+        int pctAvail = 100 - pctUse;
+        Log("JavaScript Baseline Resource Allocation:");
+        Log("- Pct Heap Use : ", pctUse,   " % (", Commas(runMemUsedBaseline_),                      " / ", Commas(retVal.runMemAvail), ")");
+        Log("- Pct Heap Free: ", pctAvail, " % (", Commas(retVal.runMemAvail - runMemUsedBaseline_), " / ", Commas(retVal.runMemAvail), ")");
     }
 
     static bool ConfigureUserDefinedMessageFromFieldDef(MsgState &msgState, const string &fieldDef)
@@ -197,6 +216,10 @@ private:
         JerryScript::SetGlobalPropertyToBareFunction("DelayMs", [](uint32_t arg){
             PAL.Delay(arg);
         });
+
+        // BH1750 Sensor API
+        JSObj_BH1750::SetI2CInstance(I2C::Instance::I2C1);
+        JSObj_BH1750::Register();
     }
 
     struct JavaScriptRunResult
@@ -373,7 +396,7 @@ private:
             }
             else
             {
-                line += FloatToString(value, 3);
+                line += ToString(value, 3);
             }
 
             retVal += sep;
@@ -543,6 +566,14 @@ private:
 
             JavaScriptRunResult result = RunSlotJavaScript(name, script);
 
+            // give user a view of what they have influence over, not the underlying
+            // actual capacity of the system
+            uint32_t runMemUsed  = result.runMemUsed - runMemUsedBaseline_;
+            uint32_t runMemAvail = result.runMemAvail - runMemUsedBaseline_;
+
+            int pctUse = runMemUsed * 100 / runMemAvail;
+            Log("User Heap: ", pctUse, " % (", Commas(runMemUsed), " / ", Commas(runMemAvail), ")");
+
             out["type"]        = "REP_RUN_JS";
             out["name"]        = name;
             out["parseOk"]     = result.parseOk;
@@ -551,8 +582,8 @@ private:
             out["runOk"]       = result.runOk;
             out["runErr"]      = result.runErr;
             out["runMs"]       = result.runMs;
-            out["runMemAvail"] = result.runMemAvail;
-            out["runMemUsed"]  = result.runMemUsed;
+            out["runMemAvail"] = runMemAvail;
+            out["runMemUsed"]  = runMemUsed;
             out["runOutput"]   = result.runOutput;
             out["msgState"]    = result.msgStateStr;
         });
@@ -560,6 +591,8 @@ private:
 
 
 private:
+
+    uint32_t runMemUsedBaseline_ = 0;
 
     // keep memory off of the main stack to avoid needing to
     // size the stack itself to a large size that every app
