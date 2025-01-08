@@ -260,6 +260,8 @@ private:
 
     JavaScriptRunResult RunSlotJavaScript(const string &slotName, const string &script)
     {
+        static const uint64_t SCRIPT_TIME_LIMIT_MS = 1'000;
+
         JavaScriptRunResult retVal;
 
         // look up slot context
@@ -282,11 +284,11 @@ private:
                     LoadJavaScriptBindings(&msgState->msg);
 
                     // set maximum execution time
-                    JSFn_DelayMs::SetTotalDurationLimitMs(1'000);
+                    JSFn_DelayMs::SetTotalDurationLimitMs(SCRIPT_TIME_LIMIT_MS);
                     JSFn_DelayMs::StartTimeNow();
 
                     // run it
-                    retVal.runErr = JerryScript::ParseAndRunScript(script);
+                    retVal.runErr = JerryScript::ParseAndRunScript(script, SCRIPT_TIME_LIMIT_MS);
 
                     // capture result of run
                     retVal.runOk      = retVal.runErr == "";
