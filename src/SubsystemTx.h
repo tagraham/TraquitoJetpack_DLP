@@ -248,6 +248,36 @@ private:
             else                    {            RadioOff(); }
         }, { .argCount = 1, .help = "clockgen run <on/off>"});
 
+        Shell::AddCommand("app.wspr.quitms", [this](vector<string> argList){
+            uint64_t quitMs = (uint64_t)atoi(argList[0].c_str());
+
+            if (quitMs == 0)
+            {
+                Log("WSPR quitms reset, will not quit early");
+
+                wsprMessageTransmitter_.SetQuitEarlyFunction([](uint64_t msSinceStart){
+                    return false;
+                });
+            }
+            else
+            {
+                Log("WSPR quitms set, will quit after ", Commas(quitMs), " ms");
+
+                wsprMessageTransmitter_.SetQuitEarlyFunction([=](uint64_t msSinceStart){
+                    bool retVal = false;
+
+                    if (msSinceStart >= quitMs)
+                    {
+                        retVal = true;
+
+                        Log("WSPR quitting early - ", Commas(msSinceStart), " ms elapsed, limit ", Commas(quitMs), " ms");
+                    }
+
+                    return retVal;
+                });
+            }
+        }, { .argCount = 1, .help = "quit wspr tx <ms> after tx start, 0 to clear"});
+
         Shell::AddCommand("app.wspr.send", [this](vector<string> argList){
             string callsign = argList[0];
             string grid = argList[1];
