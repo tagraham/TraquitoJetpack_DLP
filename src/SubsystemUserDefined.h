@@ -334,6 +334,44 @@ private:
 
 
     /////////////////////////////////////////////////////////////////
+    // JavaScript Utility Functions
+    /////////////////////////////////////////////////////////////////
+
+    bool ScriptHasNonCommentedSubString(const string &script, const string &substr)
+    {
+        bool retVal = false;
+
+        vector<string> lineList = Split(script, "\n", false, true);
+
+        string sep = "";
+        for (int i = 0; i < lineList.size() && retVal == false; ++i)
+        {
+            string &line = lineList[i];
+
+            // chop off any commented part of the line
+            string lineUncommentedPart = Split(line, "//", false, true)[0];
+
+            // split by the string we're looking for.
+            // if the returned list is greater than 1, the substring exists.
+            vector<string> splitList = Split(lineUncommentedPart, substr, false, true);
+            retVal = splitList.size() > 1;
+        }
+
+        return retVal;
+    }
+
+    bool ScriptUsesAPIGPS(const string &script)
+    {
+        return ScriptHasNonCommentedSubString(script, "gps.Get");
+    }
+
+    bool ScriptUsesAPIMsg(const string &script)
+    {
+        return ScriptHasNonCommentedSubString(script, "msg.Set");
+    }
+
+
+    /////////////////////////////////////////////////////////////////
     // JSON Utility Functions
     /////////////////////////////////////////////////////////////////
 
@@ -599,8 +637,14 @@ private:
             uint32_t runMemUsed  = result.runMemUsed - runMemUsedBaseline_;
             uint32_t runMemAvail = result.runMemAvail - runMemUsedBaseline_;
 
+            // determine what important bindings are being used
+            bool usesAPIGPS = ScriptUsesAPIGPS(script);
+            bool usesAPIMsg = ScriptUsesAPIMsg(script);
+
             int pctUse = runMemUsed * 100 / runMemAvail;
             Log("User Heap: ", pctUse, " % (", Commas(runMemUsed), " / ", Commas(runMemAvail), ")");
+            Log("Uses GPS : ", usesAPIGPS);
+            Log("Uses Msg : ", usesAPIMsg);
 
             out["type"]        = "REP_RUN_JS";
             out["name"]        = name;
@@ -615,6 +659,8 @@ private:
             out["runMemAvail"] = runMemAvail;
             out["runMemUsed"]  = runMemUsed;
             out["runOutput"]   = result.runOutput;
+            out["usesAPIGPS"]  = usesAPIGPS;
+            out["usesAPIMsg"]  = usesAPIMsg;
             out["msgState"]    = result.msgStateStr;
         });
     }
