@@ -309,14 +309,6 @@ public:
     // Flight Mode Async Loop
     /////////////////////////////////////////////////////////////////
 
-
-
-
-
-
-
-
-
     void OnNoTimeNoFix()
     {
         t_.Reset();
@@ -747,53 +739,6 @@ private:
         Watchdog::Feed();
 
         Log("Power test blinking sequence complete");
-    }
-
-
-    /////////////////////////////////////////////////////////////////
-    // Utility
-    /////////////////////////////////////////////////////////////////
-
-    // Indicate signs of life during runtime for a period of time
-    //
-    // Enhancement - Stop this from being high during transmit or GPS
-    // to conserve power
-    void SetupSignsOfLife(uint32_t durationMsIn)
-    {
-        static const uint32_t PERIOD_MS = 5000;
-        static const uint32_t ON_MS     =   75;
-        static const uint32_t OFF_MS    = PERIOD_MS - ON_MS;
-
-        static uint32_t durationMs;
-        static uint32_t countRemaining;
-
-        durationMs = durationMsIn;
-        countRemaining = durationMs / PERIOD_MS;
-
-        static TimedEventHandlerDelegate tedLed;
-        tedLed.SetCallback([this](){
-            static uint32_t durationMsNext = OFF_MS;
-            durationMsNext = (durationMsNext == ON_MS ? OFF_MS : ON_MS);
-
-            if (countRemaining)
-            {
-                pinLedGreen_.DigitalToggle();
-
-                tedLed.RegisterForTimedEvent(durationMsNext);
-            }
-            else
-            {
-                pinLedGreen_.DigitalWrite(0);
-            }
-
-            --countRemaining;
-        }, "TIMER_APP_SIGNS_OF_LIFE");
-
-        tedLed.RegisterForTimedEvent(0);
-    }
-
-    void Debug()
-    {
     }
 
 

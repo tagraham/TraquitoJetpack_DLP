@@ -27,14 +27,8 @@ using namespace std;
 
 class SubsystemUserDefined
 {
-    using MsgUD = WsprMessageTelemetryExtendedUserDefined<29>;
+    using MsgUD  = WsprMessageTelemetryExtendedUserDefined<29>;
     using MsgUDD = WsprMessageTelemetryExtendedUserDefinedDynamic<29>;
-
-    struct MsgState
-    {
-        MsgUD msg;
-        vector<string> fieldList;
-    };
 
 
 public:
