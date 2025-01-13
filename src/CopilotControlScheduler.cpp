@@ -278,6 +278,8 @@ void CopilotControlScheduler::TestPrepareWindowSchedule()
         return retVal;
     };
 
+    static const uint64_t INNER_DELAY_MS = 50;
+
     static auto IncrAndGetTestId = [&]{
         static int id = 0;
         ++id;
@@ -312,7 +314,7 @@ void CopilotControlScheduler::TestPrepareWindowSchedule()
                     "JS_EXEC",               "SEND_BASIC_TELEMETRY",    // slot 2
                     "JS_EXEC",                                          // slot 3 js
                     "TX_DISABLE_GPS_ENABLE",
-                                                "SEND_NO_MSG_NONE",        // slot 3 msg
+                                             "SEND_NO_MSG_NONE",        // slot 3 msg
                     "JS_EXEC",               "SEND_NO_MSG_NONE",        // slot 4
                     "JS_EXEC",               "SEND_NO_MSG_NONE",        // slot 5
                 };
@@ -324,7 +326,7 @@ void CopilotControlScheduler::TestPrepareWindowSchedule()
                 Log("=== Test ", id, " ", testOk ? "" : "NOT ", "ok ===");
                 LogNL();
             });
-            tedTestInner.RegisterForTimedEvent(50);
+            tedTestInner.RegisterForTimedEvent(INNER_DELAY_MS);
         });
         tedTestOuter.RegisterForTimedEvent(NextTestDuration());
     }
@@ -354,7 +356,7 @@ void CopilotControlScheduler::TestPrepareWindowSchedule()
                 vector<string> expectedList = {
                     "JS_EXEC",                                      // slot 1 js
                     "TX_DISABLE_GPS_ENABLE",
-                                                "SEND_NO_MSG_NONE",    // slot 1 msg
+                                             "SEND_NO_MSG_NONE",    // slot 1 msg
                     "JS_EXEC",               "SEND_NO_MSG_NONE",    // slot 2
                     "JS_EXEC",               "SEND_NO_MSG_NONE",    // slot 3
                     "JS_EXEC",               "SEND_NO_MSG_NONE",    // slot 4
@@ -368,7 +370,7 @@ void CopilotControlScheduler::TestPrepareWindowSchedule()
                 Log("=== Test ", id, " ", testOk ? "" : "NOT ", "ok ===");
                 LogNL();
             });
-            tedTestInner.RegisterForTimedEvent(50);
+            tedTestInner.RegisterForTimedEvent(INNER_DELAY_MS);
         });
         tedTestOuter.RegisterForTimedEvent(NextTestDuration());
     }
@@ -411,12 +413,12 @@ void CopilotControlScheduler::TestPrepareWindowSchedule()
                 Log("=== Test ", id, " ", testOk ? "" : "NOT ", "ok ===");
                 LogNL();
             });
-            tedTestInner.RegisterForTimedEvent(50);
+            tedTestInner.RegisterForTimedEvent(INNER_DELAY_MS);
         });
         tedTestOuter.RegisterForTimedEvent(NextTestDuration());
     }
 
-    // all override, with no gps lock
+    // all custom messages need gps, with no gps lock
     {
         static TimedEventHandlerDelegate tedTestOuter;
         tedTestOuter.SetCallback([this]{
@@ -455,14 +457,115 @@ void CopilotControlScheduler::TestPrepareWindowSchedule()
                 Log("=== Test ", id, " ", testOk ? "" : "NOT ", "ok ===");
                 LogNL();
             });
-            tedTestInner.RegisterForTimedEvent(50);
+            tedTestInner.RegisterForTimedEvent(INNER_DELAY_MS);
+        });
+        tedTestOuter.RegisterForTimedEvent(NextTestDuration());
+    }
+
+    // some custom messages need gps, others don't, with gps lock
+    {
+        static TimedEventHandlerDelegate tedTestOuter;
+        tedTestOuter.SetCallback([this]{
+            static TimedEventHandlerDelegate tedTestInner;
+
+            SetTesting(true);
+            int id = IncrAndGetTestId();
+            CreateMarkList(id);
+
+            bool haveGpsLock = true;
+            SetSlot("slot1", msgDefBlank, jsUsesNeither);
+            SetSlot("slot2", msgDefBlank, jsUsesNeither);
+            SetSlot("slot3", msgDefSet,   jsUsesMsg);
+            SetSlot("slot4", msgDefSet,   jsUsesBoth);
+            SetSlot("slot5", msgDefBlank, jsUsesNeither);
+            ConfigureWindowSlotBehavior(haveGpsLock);
+            PrepareWindowSchedule(0);
+
+            tedTestInner.SetCallback([this, id]{
+                SetTesting(false);
+
+                vector<string> expectedList = {
+                    "JS_EXEC",               "SEND_REGULAR_TYPE1",      // slot 1
+                    "JS_EXEC",               "SEND_BASIC_TELEMETRY",    // slot 2
+                    "JS_EXEC",               "SEND_CUSTOM_MESSAGE",     // slot 3
+                    "JS_EXEC",               "SEND_CUSTOM_MESSAGE",     // slot 4
+                    "JS_EXEC",                                          // slot 5 js
+                    "TX_DISABLE_GPS_ENABLE",
+                                             "SEND_NO_MSG_NONE",        // slot 5 msg
+                };
+
+                bool testOk = Assert(id, GetMarkList(), expectedList);
+                DestroyMarkList(id);
+
+                LogNL();
+                Log("=== Test ", id, " ", testOk ? "" : "NOT ", "ok ===");
+                LogNL();
+            });
+            tedTestInner.RegisterForTimedEvent(INNER_DELAY_MS);
         });
         tedTestOuter.RegisterForTimedEvent(NextTestDuration());
     }
 
 
+    // some custom messages need gps, others don't, with no gps lock.
+    // expect to see earlier gps enable as a result of not sending the
+    // custom message that depends on gps having a lock this time.
+    {
+        static TimedEventHandlerDelegate tedTestOuter;
+        tedTestOuter.SetCallback([this]{
+            static TimedEventHandlerDelegate tedTestInner;
+
+            SetTesting(true);
+            int id = IncrAndGetTestId();
+            CreateMarkList(id);
+
+            bool haveGpsLock = false;
+            SetSlot("slot1", msgDefBlank, jsUsesNeither);
+            SetSlot("slot2", msgDefBlank, jsUsesNeither);
+            SetSlot("slot3", msgDefSet,   jsUsesMsg);
+            SetSlot("slot4", msgDefSet,   jsUsesBoth);
+            SetSlot("slot5", msgDefBlank, jsUsesNeither);
+            ConfigureWindowSlotBehavior(haveGpsLock);
+            PrepareWindowSchedule(0);
+
+            tedTestInner.SetCallback([this, id]{
+                SetTesting(false);
+
+                vector<string> expectedList = {
+                    "JS_EXEC",               "SEND_NO_MSG_NONE",        // slot 1
+                    "JS_EXEC",               "SEND_NO_MSG_NONE",        // slot 2
+                    "JS_EXEC",               "SEND_CUSTOM_MESSAGE",     // slot 3
+                    "JS_NO_EXEC",                                       // slot 4 js
+                    "TX_DISABLE_GPS_ENABLE",
+                                             "SEND_NO_MSG_NONE",        // slot 4 msg
+                    "JS_EXEC",               "SEND_NO_MSG_NONE",        // slot 5
+                };
+
+                bool testOk = Assert(id, GetMarkList(), expectedList);
+                DestroyMarkList(id);
+
+                LogNL();
+                Log("=== Test ", id, " ", testOk ? "" : "NOT ", "ok ===");
+                LogNL();
+            });
+            tedTestInner.RegisterForTimedEvent(INNER_DELAY_MS);
+        });
+        tedTestOuter.RegisterForTimedEvent(NextTestDuration());
+    }
+
+
+
+
+
+
     Log("TestPrepareWindowSchedule Done");
 
-
-    RestoreFiles();
+    // async restore files after last test run
+    {
+        static TimedEventHandlerDelegate tedRestore;
+        tedRestore.SetCallback([this]{
+            RestoreFiles();
+        });
+        tedRestore.RegisterForTimedEvent(NextTestDuration());
+    }
 }
