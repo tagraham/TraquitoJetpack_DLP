@@ -43,7 +43,7 @@ public:
     }
 
 
-private:
+// private:
 
 
 
@@ -361,15 +361,10 @@ private:
             SLOT5_START_TIME_MS = SLOT4_START_TIME_MS + GAP_MS;
         }
 
-
         Log("PrepareWindowSchedule at ", TimestampFromMs(timeAtWindowStartMs));
 
         t_.Reset();
         Mark("PREPARE_SLOT_BEHAVIOR");
-
-
-
-
 
 
         // execute js for slot 1 right now
@@ -382,10 +377,6 @@ private:
         {
             Mark("JS_NO_EXEC");
         }
-
-
-
-
 
 
         // Set timer for warmup.
@@ -401,11 +392,7 @@ private:
         Log("Scheduled TX_WARMUP for ", TimestampFromMs(timeAtTxWarmup));
 
 
-
-
-
-
-
+        // schedule slots
 
         tedSlot1_.SetCallback([this]{
             Mark("SLOT1_START");
@@ -414,7 +401,6 @@ private:
         }, "SLOT1_START");
         tedSlot1_.RegisterForTimedEventAt(SLOT1_START_TIME_MS);
         Log("Scheduled SLOT1_START for ", TimestampFromMs(SLOT1_START_TIME_MS));
-
 
 
         tedSlot2_.SetCallback([this]{
@@ -426,7 +412,6 @@ private:
         Log("Scheduled SLOT2_START for ", TimestampFromMs(SLOT2_START_TIME_MS));
 
 
-
         tedSlot3_.SetCallback([this]{
             Mark("SLOT3_START");
             DoSlotBehavior(slotState3_, &slotState4_, "slot4");
@@ -434,7 +419,6 @@ private:
         }, "SLOT3_START");
         tedSlot3_.RegisterForTimedEventAt(SLOT3_START_TIME_MS);
         Log("Scheduled SLOT3_START for ", TimestampFromMs(SLOT3_START_TIME_MS));
-
 
 
         tedSlot4_.SetCallback([this]{
@@ -466,11 +450,6 @@ private:
         }, "SLOT5_START");
         tedSlot5_.RegisterForTimedEventAt(SLOT5_START_TIME_MS);
         Log("Scheduled SLOT5_START for ", TimestampFromMs(SLOT5_START_TIME_MS));
-
-
-
-
-
 
 
         // Determine when to enable the gps.
