@@ -31,9 +31,7 @@ public:
         // pull stored field def and configure
         string msgDef = CopilotControlConfiguration::GetMsgDef(slotName);
 
-        Log("Configuring ", slotName);
-        ConfigureMsgFromMsgDef(msg, msgDef);
-        LogNL();
+        ConfigureMsgFromMsgDef(msg, msgDef, slotName);
         
         return msg;
     }
@@ -89,7 +87,7 @@ public:
 private:
 
     // 20ms at 48MHz with 29 fields (ie don't worry about it)
-    static bool ConfigureMsgFromMsgDef(MsgUDD &msg, const string &msgDef)
+    static bool ConfigureMsgFromMsgDef(MsgUDD &msg, const string &msgDef, const string &title)
     {
         bool retVal = false;
 
@@ -144,6 +142,7 @@ private:
 
         if (retVal == false)
         {
+            Log("ERR: ", title);
             Log("JSON:");
             Log(jsonStr);
             LogNL();
