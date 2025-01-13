@@ -1,0 +1,468 @@
+#include "CopilotControlScheduler.h"
+
+#include "StrictMode.h"
+
+
+void CopilotControlScheduler::TestConfigureWindowSlotBehavior()
+{
+    BackupFiles();
+
+    // set up test case primitives
+    string msgDefBlank = "";
+    string msgDefSet = "{ \"name\": \"Altitude\", \"unit\": \"Meters\", \"lowValue\": 0, \"highValue\": 21340, \"stepSize\": 20 },";
+
+    string jsUsesNeither = "";
+    string jsUsesGps = "gps.GetAltitudeMeters();";
+    string jsUsesMsg = "msg.SetAltitudeMeters(1);";
+    string jsUsesBoth = jsUsesGps + jsUsesMsg;
+
+    auto SetSlot = [](const string &slotName, const string &msgDef, const string &js){
+        FilesystemLittleFS::Write(slotName + ".json", msgDef);
+        FilesystemLittleFS::Write(slotName + ".js", js);
+    };
+
+    // set up checking outcome
+    auto Assert = [](string slotName, const SlotBehavior &slotBehavior, bool runJs, string msgSend, bool canSendDefault){
+        bool retVal = true;
+
+        if (slotBehavior.runJs != runJs || slotBehavior.msgSend != msgSend || slotBehavior.canSendDefault != canSendDefault)
+        {
+            retVal = false;
+
+            Log("Assert ERR: ", slotName);
+
+            if (slotBehavior.runJs != runJs)
+            {
+                Log("- runJs expected(", runJs, ") != actual(", slotBehavior.runJs, ")");
+            }
+
+            if (slotBehavior.msgSend != msgSend)
+            {
+                Log("- msgSend expected(", msgSend, ") != actual(", slotBehavior.msgSend, ")");
+            }
+
+            if (slotBehavior.canSendDefault != canSendDefault)
+            {
+                Log("- canSendDefault expected(", canSendDefault, ") != actual(", slotBehavior.canSendDefault, ")");
+            }
+        }
+
+        return retVal;
+    };
+
+
+    // run test cases
+    LogNL();
+
+    bool ok = true;
+
+    {
+        Log("=== Testing GPS = False, w/ Msg Def ===");
+        LogNL();
+
+        bool haveGpsLock = false;
+        SetSlot("slot1", msgDefSet, jsUsesNeither);
+        SetSlot("slot2", msgDefSet, jsUsesMsg);
+        SetSlot("slot3", msgDefSet, jsUsesGps);
+        SetSlot("slot4", msgDefSet, jsUsesBoth);
+
+        ConfigureWindowSlotBehavior(haveGpsLock);
+
+        bool testsOk = true;
+        testsOk &= Assert("slot1", slotState1_.slotBehavior, true,  "none",   haveGpsLock);
+        testsOk &= Assert("slot2", slotState2_.slotBehavior, true,  "custom", haveGpsLock);
+        testsOk &= Assert("slot3", slotState3_.slotBehavior, false, "none",   haveGpsLock);
+        testsOk &= Assert("slot4", slotState4_.slotBehavior, false, "none",   haveGpsLock);
+
+        ok &= testsOk;
+
+        Log("=== Tests ", testsOk ? "" : "NOT ", "ok ===");
+        LogNL();
+    }
+
+    {
+        Log("=== Testing GPS = False, w/ no Msg Def ===");
+        LogNL();
+
+        bool haveGpsLock = false;
+        SetSlot("slot1", msgDefBlank, jsUsesNeither);
+        SetSlot("slot2", msgDefBlank, jsUsesMsg);
+        SetSlot("slot3", msgDefBlank, jsUsesGps);
+        SetSlot("slot4", msgDefBlank, jsUsesBoth);
+
+        ConfigureWindowSlotBehavior(haveGpsLock);
+
+        bool testsOk = true;
+        testsOk &= Assert("slot1", slotState1_.slotBehavior, true,  "none", haveGpsLock);
+        testsOk &= Assert("slot2", slotState2_.slotBehavior, true,  "none", haveGpsLock);
+        testsOk &= Assert("slot3", slotState3_.slotBehavior, false, "none", haveGpsLock);
+        testsOk &= Assert("slot4", slotState4_.slotBehavior, false, "none", haveGpsLock);
+
+        ok &= testsOk;
+
+        Log("=== Tests ", testsOk ? "" : "NOT ", "ok ===");
+        LogNL();
+    }
+
+    {
+        Log("=== Testing GPS = True, w/ Msg Def ===");
+        LogNL();
+
+        bool haveGpsLock = true;
+        SetSlot("slot1", msgDefSet, jsUsesNeither);
+        SetSlot("slot2", msgDefSet, jsUsesMsg);
+        SetSlot("slot3", msgDefSet, jsUsesGps);
+        SetSlot("slot4", msgDefSet, jsUsesBoth);
+
+        ConfigureWindowSlotBehavior(haveGpsLock);
+
+        bool testsOk = true;
+        testsOk &= Assert("slot1", slotState1_.slotBehavior, true, "default", haveGpsLock);
+        testsOk &= Assert("slot2", slotState2_.slotBehavior, true, "custom",  haveGpsLock);
+        // here it's "none" because there is no actual default function, but if there was
+        // a default function, it would fire here
+        testsOk &= Assert("slot3", slotState3_.slotBehavior, true, "none",    haveGpsLock);
+        testsOk &= Assert("slot4", slotState4_.slotBehavior, true, "custom",  haveGpsLock);
+
+        ok &= testsOk;
+
+        Log("=== Tests ", testsOk ? "" : "NOT ", "ok ===");
+        LogNL();
+    }
+
+    {
+        Log("=== Testing GPS = True, w/ no Msg Def ===");
+        LogNL();
+
+        bool haveGpsLock = true;
+        SetSlot("slot1", msgDefBlank, jsUsesNeither);
+        SetSlot("slot2", msgDefBlank, jsUsesMsg);
+        SetSlot("slot3", msgDefBlank, jsUsesGps);
+        SetSlot("slot4", msgDefBlank, jsUsesBoth);
+
+        ConfigureWindowSlotBehavior(haveGpsLock);
+
+        bool testsOk = true;
+        testsOk &= Assert("slot1", slotState1_.slotBehavior, true, "default", haveGpsLock);
+        testsOk &= Assert("slot2", slotState2_.slotBehavior, true, "default", haveGpsLock);
+        testsOk &= Assert("slot3", slotState3_.slotBehavior, true, "none",    haveGpsLock);
+        testsOk &= Assert("slot4", slotState4_.slotBehavior, true, "none",    haveGpsLock);
+
+        ok &= testsOk;
+
+        Log("=== Tests ", testsOk ? "" : "NOT ", "ok ===");
+        LogNL();
+    }
+
+    Log("=== ALL Tests ", ok ? "" : "NOT ", "ok ===");
+    LogNL();
+
+    RestoreFiles();
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+void CopilotControlScheduler::TestPrepareWindowSchedule()
+{
+    BackupFiles();
+
+    Log("TestPrepareWindowSchedule Start");
+
+
+
+
+    // set up test case primitives
+    static string msgDefBlank = "";
+    static string msgDefSet = "{ \"name\": \"Altitude\", \"unit\": \"Meters\", \"lowValue\": 0, \"highValue\": 21340, \"stepSize\": 20 },";
+
+    static string jsUsesNeither = "";
+    static string jsUsesGps = "gps.GetAltitudeMeters();";
+    static string jsUsesMsg = "msg.SetAltitudeMeters(1);";
+    static string jsUsesBoth = jsUsesGps + jsUsesMsg;
+
+    static auto SetSlot = [](const string &slotName, const string &msgDef, const string &js){
+        FilesystemLittleFS::Write(slotName + ".json", msgDef);
+        FilesystemLittleFS::Write(slotName + ".js", js);
+    };
+
+
+    // expected is a subset of actual, but all elements need to be found
+    // in the order expressed for it to be a match
+    static auto Assert = [](int id, vector<string> actualList, vector<string> expectedList){
+        bool retVal = true;
+
+        while (expectedList.size())
+        {
+            // pop first element from expected list
+            string expected = *expectedList.begin();
+            expectedList.erase(expectedList.begin());
+
+            // remove non-matching elements from actual list
+            while (actualList.size() && expected != *actualList.begin())
+            {
+                actualList.erase(actualList.begin());
+            }
+
+            // remove the element you just compared equal to (if exists)
+            if (actualList.size())
+            {
+                actualList.erase(actualList.begin());
+            }
+
+            // if now empty, the compare is over
+            if (actualList.size() == 0)
+            {
+                break;
+            }
+        }
+
+        retVal = expectedList.size() == 0;
+
+        if (retVal == false)
+        {
+            Log("Assert ERR: test", id);
+            Log("Expected items remain:");
+            for (const auto &str : expectedList)
+            {
+                Log("  ", str);
+            }
+        }
+
+        return retVal;
+    };
+
+    static auto NextTestDuration = [&]{
+        static uint64_t durationMs = 0;
+
+        uint64_t retVal = durationMs;
+        
+        // works at 125 MHz
+        durationMs += 1500;
+
+        return retVal;
+    };
+
+    static auto IncrAndGetTestId = [&]{
+        static int id = 0;
+        ++id;
+        return id;
+    };
+
+
+    // default behavior, with gps lock
+    {
+        static TimedEventHandlerDelegate tedTestOuter;
+        tedTestOuter.SetCallback([this]{
+            static TimedEventHandlerDelegate tedTestInner;
+
+            SetTesting(true);
+            int id = IncrAndGetTestId();
+            CreateMarkList(id);
+
+            bool haveGpsLock = true;
+            SetSlot("slot1", msgDefBlank, jsUsesNeither);
+            SetSlot("slot2", msgDefBlank, jsUsesNeither);
+            SetSlot("slot3", msgDefBlank, jsUsesNeither);
+            SetSlot("slot4", msgDefBlank, jsUsesNeither);
+            SetSlot("slot5", msgDefBlank, jsUsesNeither);
+            ConfigureWindowSlotBehavior(haveGpsLock);
+            PrepareWindowSchedule(0);
+
+            tedTestInner.SetCallback([this, id]{
+                SetTesting(false);
+
+                vector<string> expectedList = {
+                    "JS_EXEC",               "SEND_REGULAR_TYPE1",      // slot 1
+                    "JS_EXEC",               "SEND_BASIC_TELEMETRY",    // slot 2
+                    "JS_EXEC",                                          // slot 3 js
+                    "TX_DISABLE_GPS_ENABLE",
+                                                "SEND_NO_MSG_NONE",        // slot 3 msg
+                    "JS_EXEC",               "SEND_NO_MSG_NONE",        // slot 4
+                    "JS_EXEC",               "SEND_NO_MSG_NONE",        // slot 5
+                };
+
+                bool testOk = Assert(id, GetMarkList(), expectedList);
+                DestroyMarkList(id);
+
+                LogNL();
+                Log("=== Test ", id, " ", testOk ? "" : "NOT ", "ok ===");
+                LogNL();
+            });
+            tedTestInner.RegisterForTimedEvent(50);
+        });
+        tedTestOuter.RegisterForTimedEvent(NextTestDuration());
+    }
+
+    // default behavior, with no gps lock
+    {
+        static TimedEventHandlerDelegate tedTestOuter;
+        tedTestOuter.SetCallback([this]{
+            static TimedEventHandlerDelegate tedTestInner;
+
+            SetTesting(true);
+            int id = IncrAndGetTestId();
+            CreateMarkList(id);
+
+            bool haveGpsLock = false;
+            SetSlot("slot1", msgDefBlank, jsUsesNeither);
+            SetSlot("slot2", msgDefBlank, jsUsesNeither);
+            SetSlot("slot3", msgDefBlank, jsUsesNeither);
+            SetSlot("slot4", msgDefBlank, jsUsesNeither);
+            SetSlot("slot5", msgDefBlank, jsUsesNeither);
+            ConfigureWindowSlotBehavior(haveGpsLock);
+            PrepareWindowSchedule(0);
+
+            tedTestInner.SetCallback([this, id]{
+                SetTesting(false);
+
+                vector<string> expectedList = {
+                    "JS_EXEC",                                      // slot 1 js
+                    "TX_DISABLE_GPS_ENABLE",
+                                                "SEND_NO_MSG_NONE",    // slot 1 msg
+                    "JS_EXEC",               "SEND_NO_MSG_NONE",    // slot 2
+                    "JS_EXEC",               "SEND_NO_MSG_NONE",    // slot 3
+                    "JS_EXEC",               "SEND_NO_MSG_NONE",    // slot 4
+                    "JS_EXEC",               "SEND_NO_MSG_NONE",    // slot 5
+                };
+
+                bool testOk = Assert(id, GetMarkList(), expectedList);
+                DestroyMarkList(id);
+
+                LogNL();
+                Log("=== Test ", id, " ", testOk ? "" : "NOT ", "ok ===");
+                LogNL();
+            });
+            tedTestInner.RegisterForTimedEvent(50);
+        });
+        tedTestOuter.RegisterForTimedEvent(NextTestDuration());
+    }
+
+    // all override, with gps lock
+    {
+        static TimedEventHandlerDelegate tedTestOuter;
+        tedTestOuter.SetCallback([this]{
+            static TimedEventHandlerDelegate tedTestInner;
+
+            SetTesting(true);
+            int id = IncrAndGetTestId();
+            CreateMarkList(id);
+
+            bool haveGpsLock = true;
+            SetSlot("slot1", msgDefSet, jsUsesBoth);
+            SetSlot("slot2", msgDefSet, jsUsesBoth);
+            SetSlot("slot3", msgDefSet, jsUsesBoth);
+            SetSlot("slot4", msgDefSet, jsUsesBoth);
+            SetSlot("slot5", msgDefSet, jsUsesBoth);
+            ConfigureWindowSlotBehavior(haveGpsLock);
+            PrepareWindowSchedule(0);
+
+            tedTestInner.SetCallback([this, id]{
+                SetTesting(false);
+
+                vector<string> expectedList = {
+                    "JS_EXEC",               "SEND_CUSTOM_MESSAGE",    // slot 1
+                    "JS_EXEC",               "SEND_CUSTOM_MESSAGE",    // slot 2
+                    "JS_EXEC",               "SEND_CUSTOM_MESSAGE",    // slot 3
+                    "JS_EXEC",               "SEND_CUSTOM_MESSAGE",    // slot 4
+                    "JS_EXEC",               "SEND_CUSTOM_MESSAGE",    // slot 5
+                    "TX_DISABLE_GPS_ENABLE",
+                };
+
+                bool testOk = Assert(id, GetMarkList(), expectedList);
+                DestroyMarkList(id);
+
+                LogNL();
+                Log("=== Test ", id, " ", testOk ? "" : "NOT ", "ok ===");
+                LogNL();
+            });
+            tedTestInner.RegisterForTimedEvent(50);
+        });
+        tedTestOuter.RegisterForTimedEvent(NextTestDuration());
+    }
+
+    // all override, with no gps lock
+    {
+        static TimedEventHandlerDelegate tedTestOuter;
+        tedTestOuter.SetCallback([this]{
+            static TimedEventHandlerDelegate tedTestInner;
+
+            SetTesting(true);
+            int id = IncrAndGetTestId();
+            CreateMarkList(id);
+
+            bool haveGpsLock = false;
+            SetSlot("slot1", msgDefSet, jsUsesBoth);
+            SetSlot("slot2", msgDefSet, jsUsesBoth);
+            SetSlot("slot3", msgDefSet, jsUsesBoth);
+            SetSlot("slot4", msgDefSet, jsUsesBoth);
+            SetSlot("slot5", msgDefSet, jsUsesBoth);
+            ConfigureWindowSlotBehavior(haveGpsLock);
+            PrepareWindowSchedule(0);
+
+            tedTestInner.SetCallback([this, id]{
+                SetTesting(false);
+
+                vector<string> expectedList = {
+                    "JS_NO_EXEC",                                      // slot 1 js
+                    "TX_DISABLE_GPS_ENABLE",
+                                                "SEND_NO_MSG_NONE",    // slot 1 msg
+                    "JS_NO_EXEC",               "SEND_NO_MSG_NONE",    // slot 2
+                    "JS_NO_EXEC",               "SEND_NO_MSG_NONE",    // slot 3
+                    "JS_NO_EXEC",               "SEND_NO_MSG_NONE",    // slot 4
+                    "JS_NO_EXEC",               "SEND_NO_MSG_NONE",    // slot 5
+                };
+
+                bool testOk = Assert(id, GetMarkList(), expectedList);
+                DestroyMarkList(id);
+
+                LogNL();
+                Log("=== Test ", id, " ", testOk ? "" : "NOT ", "ok ===");
+                LogNL();
+            });
+            tedTestInner.RegisterForTimedEvent(50);
+        });
+        tedTestOuter.RegisterForTimedEvent(NextTestDuration());
+    }
+
+
+    Log("TestPrepareWindowSchedule Done");
+
+
+    RestoreFiles();
+}
