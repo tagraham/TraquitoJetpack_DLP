@@ -6,6 +6,7 @@
 #include "GPS.h"
 #include "Log.h"
 #include "Shell.h"
+#include "TimeClass.h"
 #include "Timeline.h"
 
 #include <functional>
@@ -239,6 +240,20 @@ public:
     void OnGpsLockTimeOnly()
     {
 
+
+
+
+        // adjust local wall clock time?
+
+
+
+
+
+
+
+
+
+
     }
 
 
@@ -316,8 +331,7 @@ private:
     // Internal
     /////////////////////////////////////////////////////////////////
 
-private:
-public:     // fix, for testing atm
+public: // for test running
 
 
 
@@ -551,7 +565,7 @@ public:     // fix, for testing atm
             SLOT5_START_TIME_MS = SLOT4_START_TIME_MS + GAP_MS;
         }
 
-        Log("PrepareWindowSchedule at ", TimestampFromMs(timeAtWindowStartMs));
+        Log("PrepareWindowSchedule at ", TimeAt(timeAtWindowStartMs));
 
         t_.Reset();
         Mark("PREPARE_SLOT_BEHAVIOR");
@@ -579,7 +593,7 @@ public:     // fix, for testing atm
             StartRadioWarmup();
         }, "TX_WARMUP");
         tedTxWarmup_.RegisterForTimedEventAt(timeAtTxWarmup);
-        Log("Scheduled TX_WARMUP for ", TimestampFromMs(timeAtTxWarmup));
+        Log("Scheduled TX_WARMUP for ", TimeAt(timeAtTxWarmup));
 
 
         // schedule slots
@@ -590,7 +604,7 @@ public:     // fix, for testing atm
             Mark("SLOT1_END");
         }, "SLOT1_START");
         tedSlot1_.RegisterForTimedEventAt(SLOT1_START_TIME_MS);
-        Log("Scheduled SLOT1_START for ", TimestampFromMs(SLOT1_START_TIME_MS));
+        Log("Scheduled SLOT1_START for ", TimeAt(SLOT1_START_TIME_MS));
 
 
         tedSlot2_.SetCallback([this]{
@@ -599,7 +613,7 @@ public:     // fix, for testing atm
             Mark("SLOT2_END");
         }, "SLOT2_START");
         tedSlot2_.RegisterForTimedEventAt(SLOT2_START_TIME_MS);
-        Log("Scheduled SLOT2_START for ", TimestampFromMs(SLOT2_START_TIME_MS));
+        Log("Scheduled SLOT2_START for ", TimeAt(SLOT2_START_TIME_MS));
 
 
         tedSlot3_.SetCallback([this]{
@@ -608,7 +622,7 @@ public:     // fix, for testing atm
             Mark("SLOT3_END");
         }, "SLOT3_START");
         tedSlot3_.RegisterForTimedEventAt(SLOT3_START_TIME_MS);
-        Log("Scheduled SLOT3_START for ", TimestampFromMs(SLOT3_START_TIME_MS));
+        Log("Scheduled SLOT3_START for ", TimeAt(SLOT3_START_TIME_MS));
 
 
         tedSlot4_.SetCallback([this]{
@@ -617,7 +631,7 @@ public:     // fix, for testing atm
             Mark("SLOT4_END");
         }, "SLOT4_START");
         tedSlot4_.RegisterForTimedEventAt(SLOT4_START_TIME_MS);
-        Log("Scheduled SLOT4_START for ", TimestampFromMs(SLOT4_START_TIME_MS));
+        Log("Scheduled SLOT4_START for ", TimeAt(SLOT4_START_TIME_MS));
 
 
         tedSlot5_.SetCallback([this]{
@@ -637,7 +651,7 @@ public:     // fix, for testing atm
             Mark("SLOT5_END");
         }, "SLOT5_START");
         tedSlot5_.RegisterForTimedEventAt(SLOT5_START_TIME_MS);
-        Log("Scheduled SLOT5_START for ", TimestampFromMs(SLOT5_START_TIME_MS));
+        Log("Scheduled SLOT5_START for ", TimeAt(SLOT5_START_TIME_MS));
 
 
         // Determine when to enable the gps.
@@ -678,7 +692,7 @@ public:     // fix, for testing atm
             }
         }, "TX_DISABLE_GPS_ENABLE");
         tedTxDisableGpsEnable_.RegisterForTimedEventAt(timeAtChangeMs);
-        Log("Scheduled TX_DISABLE_GPS_ENABLE for ", TimestampFromMs(timeAtChangeMs));
+        Log("Scheduled TX_DISABLE_GPS_ENABLE for ", TimeAt(timeAtChangeMs));
     }
 
     void TestPrepareWindowSchedule();
@@ -797,12 +811,17 @@ public:     // fix, for testing atm
     {
         uint64_t timeUs = t_.Event(str);
 
-        Log("[", TimestampFromUs(timeUs), "] ", str);
+        Log("[", TimeAt(timeUs / 1'000), "] ", str);
 
         if (IsTesting())
         {
             AddToMarkList(str);
         }
+    }
+
+    string TimeAt(uint64_t timeMs)
+    {
+        return Time::GetTimeShortFromMs(timeMs);
     }
 
 
