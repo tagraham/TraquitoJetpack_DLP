@@ -23,9 +23,9 @@ private:
         bool   runJs   = true;
         string msgSend = "default";
 
-        bool             hasDefault     = false;
-        bool             canSendDefault = false;
-        function<void()> fnSendDefault  = []{};
+        bool                     hasDefault     = false;
+        bool                     canSendDefault = false;
+        function<void(uint64_t)> fnSendDefault  = [](uint64_t){};
     };
 
     struct SlotState
@@ -71,41 +71,41 @@ public:
 
 private:
 
-    function<void()> fnCbSendRegularType1_   = []{};
-    function<void()> fnCbSendBasicTelemetry_ = []{};
-    function<void()> fnCbSendUserDefined_    = []{};
+    function<void(uint64_t quitAfterMs)> fnCbSendRegularType1_   = [](uint64_t){};
+    function<void(uint64_t quitAfterMs)> fnCbSendBasicTelemetry_ = [](uint64_t){};
+    function<void(uint64_t quitAfterMs)> fnCbSendUserDefined_    = [](uint64_t){};
 
-    void SendRegularType1()
+    void SendRegularType1(uint64_t quitAfterMs = 0)
     {
         Mark("SEND_REGULAR_TYPE1");
-        fnCbSendRegularType1_();
+        fnCbSendRegularType1_(quitAfterMs);
     }
 
-    void SendBasicTelemetry()
+    void SendBasicTelemetry(uint64_t quitAfterMs = 0)
     {
         Mark("SEND_BASIC_TELEMETRY");
-        fnCbSendBasicTelemetry_();
+        fnCbSendBasicTelemetry_(quitAfterMs);
     }
 
-    void SendCustomMessage()
+    void SendCustomMessage(uint64_t quitAfterMs = 0)
     {
         Mark("SEND_CUSTOM_MESSAGE");
-        fnCbSendUserDefined_();
+        fnCbSendUserDefined_(quitAfterMs);
     }
 
 public:
 
-    void SetCallbackSendRegularType1(function<void()> fn)
+    void SetCallbackSendRegularType1(function<void(uint64_t quitAfterMs)> fn)
     {
         fnCbSendRegularType1_ = fn;
     }
 
-    void SetCallbackSendBasicTelemetry(function<void()> fn)
+    void SetCallbackSendBasicTelemetry(function<void(uint64_t quitAfterMs)> fn)
     {
         fnCbSendBasicTelemetry_ = fn;
     }
 
-    void SetCallbackSendUserDefined(function<void()> fn)
+    void SetCallbackSendUserDefined(function<void(uint64_t quitAfterMs)> fn)
     {
         fnCbSendUserDefined_ = fn;
     }
@@ -340,7 +340,7 @@ public:     // fix, for testing atm
     // the associated javascript executed successfully.
     //
     // The default is sent in cases where there was a default and a bad custom event.
-    void DoSlotBehavior(SlotState &slotStateThis, SlotState *slotStateNext = nullptr, const char *slotNameNext = ""){
+    void DoSlotBehavior(SlotState &slotStateThis, uint64_t quitAfterMs, SlotState *slotStateNext = nullptr, const char *slotNameNext = ""){
         if (slotStateThis.slotBehavior.msgSend != "none")
         {
             bool sendDefault = false;
@@ -349,7 +349,7 @@ public:     // fix, for testing atm
             {
                 if (slotStateThis.jsRanOk)
                 {
-                    SendCustomMessage();
+                    SendCustomMessage(quitAfterMs);
                 }
                 else
                 {
@@ -367,7 +367,7 @@ public:     // fix, for testing atm
                 {
                     if (slotStateThis.slotBehavior.canSendDefault)
                     {
-                        slotStateThis.slotBehavior.fnSendDefault();
+                        slotStateThis.slotBehavior.fnSendDefault(quitAfterMs);
                     }
                     else
                     {
@@ -418,14 +418,14 @@ public:     // fix, for testing atm
             CalculateSlotBehavior("slot1",
                                   haveGpsLock,
                                   "default",
-                                  [this]{ SendRegularType1(); });
+                                  [this](uint64_t){ SendRegularType1(); });
 
         // slot 2
         slotState2_.slotBehavior =
             CalculateSlotBehavior("slot2",
                                   haveGpsLock,
                                   "default",
-                                  [this]{ SendBasicTelemetry(); });
+                                  [this](uint64_t){ SendBasicTelemetry(); });
 
         // slot 3
         slotState3_.slotBehavior = CalculateSlotBehavior("slot3", haveGpsLock);
@@ -441,10 +441,10 @@ public:     // fix, for testing atm
     // This function does not think about or care about running the js in advance in prior slot.
     //
     // Assumes that both a message def and javascript exist.
-    SlotBehavior CalculateSlotBehavior(const string     &slotName,
-                                       bool              haveGpsLock,
-                                       string            msgSendDefault = "none",
-                                       function<void()>  fnSendDefault = []{})
+    SlotBehavior CalculateSlotBehavior(const string             &slotName,
+                                       bool                      haveGpsLock,
+                                       string                    msgSendDefault = "none",
+                                       function<void(uint64_t)>  fnSendDefault = [](uint64_t){})
     {
         // check slot javascript dependencies
         bool jsUsesGpsApi = js_.SlotScriptUsesAPIGPS(slotName);
@@ -586,7 +586,7 @@ public:     // fix, for testing atm
 
         tedSlot1_.SetCallback([this]{
             Mark("SLOT1_START");
-            DoSlotBehavior(slotState1_, &slotState2_, "slot2");
+            DoSlotBehavior(slotState1_, 0, &slotState2_, "slot2");
             Mark("SLOT1_END");
         }, "SLOT1_START");
         tedSlot1_.RegisterForTimedEventAt(SLOT1_START_TIME_MS);
@@ -595,7 +595,7 @@ public:     // fix, for testing atm
 
         tedSlot2_.SetCallback([this]{
             Mark("SLOT2_START");
-            DoSlotBehavior(slotState2_, &slotState3_, "slot3");
+            DoSlotBehavior(slotState2_, 0, &slotState3_, "slot3");
             Mark("SLOT2_END");
         }, "SLOT2_START");
         tedSlot2_.RegisterForTimedEventAt(SLOT2_START_TIME_MS);
@@ -604,7 +604,7 @@ public:     // fix, for testing atm
 
         tedSlot3_.SetCallback([this]{
             Mark("SLOT3_START");
-            DoSlotBehavior(slotState3_, &slotState4_, "slot4");
+            DoSlotBehavior(slotState3_, 0, &slotState4_, "slot4");
             Mark("SLOT3_END");
         }, "SLOT3_START");
         tedSlot3_.RegisterForTimedEventAt(SLOT3_START_TIME_MS);
@@ -613,7 +613,7 @@ public:     // fix, for testing atm
 
         tedSlot4_.SetCallback([this]{
             Mark("SLOT4_START");
-            DoSlotBehavior(slotState4_, &slotState5_, "slot5");
+            DoSlotBehavior(slotState4_, 0, &slotState5_, "slot5");
             Mark("SLOT4_END");
         }, "SLOT4_START");
         tedSlot4_.RegisterForTimedEventAt(SLOT4_START_TIME_MS);
@@ -623,11 +623,9 @@ public:     // fix, for testing atm
         tedSlot5_.SetCallback([this]{
             Mark("SLOT5_START");
 
-            // set transmitter to quit early
-            DoSlotBehavior(slotState5_);
-            // un-set transmitter to quit early
-
-
+            // tell sender to quit early
+            const uint64_t ONE_MINUTE_MS = 1 * 60 * 1'000;
+            DoSlotBehavior(slotState5_, ONE_MINUTE_MS);
 
 
             // execute js for slot 1
