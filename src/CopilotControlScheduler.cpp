@@ -86,7 +86,7 @@ void CopilotControlScheduler::TestConfigureWindowSlotBehavior()
         SetSlot("slot3", msgDefSet, jsUsesGps);
         SetSlot("slot4", msgDefSet, jsUsesBoth);
 
-        ConfigureWindowSlotBehavior(haveGpsLock);
+        PrepareWindowSlotBehavior(haveGpsLock);
 
         bool testsOk = true;
         testsOk &= Assert("slot1", slotState1_.slotBehavior, true,  "none",   haveGpsLock);
@@ -110,7 +110,7 @@ void CopilotControlScheduler::TestConfigureWindowSlotBehavior()
         SetSlot("slot3", msgDefBlank, jsUsesGps);
         SetSlot("slot4", msgDefBlank, jsUsesBoth);
 
-        ConfigureWindowSlotBehavior(haveGpsLock);
+        PrepareWindowSlotBehavior(haveGpsLock);
 
         bool testsOk = true;
         testsOk &= Assert("slot1", slotState1_.slotBehavior, true,  "none", haveGpsLock);
@@ -134,7 +134,7 @@ void CopilotControlScheduler::TestConfigureWindowSlotBehavior()
         SetSlot("slot3", msgDefSet, jsUsesGps);
         SetSlot("slot4", msgDefSet, jsUsesBoth);
 
-        ConfigureWindowSlotBehavior(haveGpsLock);
+        PrepareWindowSlotBehavior(haveGpsLock);
 
         bool testsOk = true;
         testsOk &= Assert("slot1", slotState1_.slotBehavior, true, "default", haveGpsLock);
@@ -160,7 +160,7 @@ void CopilotControlScheduler::TestConfigureWindowSlotBehavior()
         SetSlot("slot3", msgDefBlank, jsUsesGps);
         SetSlot("slot4", msgDefBlank, jsUsesBoth);
 
-        ConfigureWindowSlotBehavior(haveGpsLock);
+        PrepareWindowSlotBehavior(haveGpsLock);
 
         bool testsOk = true;
         testsOk &= Assert("slot1", slotState1_.slotBehavior, true, "default", haveGpsLock);
@@ -324,7 +324,7 @@ void TestDefaultWithGps()
         SetSlot("slot3", msgDefBlank, jsUsesNeither);
         SetSlot("slot4", msgDefBlank, jsUsesNeither);
         SetSlot("slot5", msgDefBlank, jsUsesNeither);
-        scheduler->ConfigureWindowSlotBehavior(haveGpsLock);
+        scheduler->PrepareWindowSlotBehavior(haveGpsLock);
         scheduler->PrepareWindowSchedule(0);
 
         tedTestInner.SetCallback([id]{
@@ -372,7 +372,7 @@ void TestDefaultNoGps()
         SetSlot("slot3", msgDefBlank, jsUsesNeither);
         SetSlot("slot4", msgDefBlank, jsUsesNeither);
         SetSlot("slot5", msgDefBlank, jsUsesNeither);
-        scheduler->ConfigureWindowSlotBehavior(haveGpsLock);
+        scheduler->PrepareWindowSlotBehavior(haveGpsLock);
         scheduler->PrepareWindowSchedule(0);
 
         tedTestInner.SetCallback([id]{
@@ -420,7 +420,7 @@ void TestAllOverrideWithGps()
         SetSlot("slot3", msgDefSet, jsUsesBoth);
         SetSlot("slot4", msgDefSet, jsUsesBoth);
         SetSlot("slot5", msgDefSet, jsUsesBoth);
-        scheduler->ConfigureWindowSlotBehavior(haveGpsLock);
+        scheduler->PrepareWindowSlotBehavior(haveGpsLock);
         scheduler->PrepareWindowSchedule(0);
 
         tedTestInner.SetCallback([id]{
@@ -467,7 +467,7 @@ void TestAllCustomMessagesNeedGpsWithNoGps()
         SetSlot("slot3", msgDefSet, jsUsesBoth);
         SetSlot("slot4", msgDefSet, jsUsesBoth);
         SetSlot("slot5", msgDefSet, jsUsesBoth);
-        scheduler->ConfigureWindowSlotBehavior(haveGpsLock);
+        scheduler->PrepareWindowSlotBehavior(haveGpsLock);
         scheduler->PrepareWindowSchedule(0);
 
         tedTestInner.SetCallback([id]{
@@ -515,7 +515,7 @@ void TestSomeCustomMessagesNeedGpsSomeDontWithGps()
         SetSlot("slot3", msgDefSet,   jsUsesMsg);
         SetSlot("slot4", msgDefSet,   jsUsesBoth);
         SetSlot("slot5", msgDefBlank, jsUsesNeither);
-        scheduler->ConfigureWindowSlotBehavior(haveGpsLock);
+        scheduler->PrepareWindowSlotBehavior(haveGpsLock);
         scheduler->PrepareWindowSchedule(0);
 
         tedTestInner.SetCallback([id]{
@@ -566,7 +566,7 @@ void TestSomeCustomMessagesNeedGpsSomeDontNoGps()
         SetSlot("slot3", msgDefSet,   jsUsesMsg);
         SetSlot("slot4", msgDefSet,   jsUsesBoth);
         SetSlot("slot5", msgDefBlank, jsUsesNeither);
-        scheduler->ConfigureWindowSlotBehavior(haveGpsLock);
+        scheduler->PrepareWindowSlotBehavior(haveGpsLock);
         scheduler->PrepareWindowSchedule(0);
 
         tedTestInner.SetCallback([id]{
@@ -632,7 +632,7 @@ void TestDefaultWithGpsBadJs()
         SetSlot("slot3", msgDefBlank, jsUsesNeitherBad);
         SetSlot("slot4", msgDefBlank, jsUsesNeitherBad);
         SetSlot("slot5", msgDefBlank, jsUsesNeitherBad);
-        scheduler->ConfigureWindowSlotBehavior(haveGpsLock);
+        scheduler->PrepareWindowSlotBehavior(haveGpsLock);
         scheduler->PrepareWindowSchedule(0);
 
         tedTestInner.SetCallback([id]{
@@ -680,7 +680,7 @@ void TestDefaultNoGpsBadJs()
         SetSlot("slot3", msgDefBlank, jsUsesNeitherBad);
         SetSlot("slot4", msgDefBlank, jsUsesNeitherBad);
         SetSlot("slot5", msgDefBlank, jsUsesNeitherBad);
-        scheduler->ConfigureWindowSlotBehavior(haveGpsLock);
+        scheduler->PrepareWindowSlotBehavior(haveGpsLock);
         scheduler->PrepareWindowSchedule(0);
 
         tedTestInner.SetCallback([id]{
@@ -728,7 +728,7 @@ void TestAllOverrideWithGpsBadJs()
         SetSlot("slot3", msgDefSet, jsUsesBothBad);
         SetSlot("slot4", msgDefSet, jsUsesBothBad);
         SetSlot("slot5", msgDefSet, jsUsesBothBad);
-        scheduler->ConfigureWindowSlotBehavior(haveGpsLock);
+        scheduler->PrepareWindowSlotBehavior(haveGpsLock);
         scheduler->PrepareWindowSchedule(0);
 
         tedTestInner.SetCallback([id]{
@@ -775,7 +775,7 @@ void TestAllCustomMessagesNeedGpsWithNoGpsBadJs()
         SetSlot("slot3", msgDefSet, jsUsesBothBad);
         SetSlot("slot4", msgDefSet, jsUsesBothBad);
         SetSlot("slot5", msgDefSet, jsUsesBothBad);
-        scheduler->ConfigureWindowSlotBehavior(haveGpsLock);
+        scheduler->PrepareWindowSlotBehavior(haveGpsLock);
         scheduler->PrepareWindowSchedule(0);
 
         tedTestInner.SetCallback([id]{
@@ -823,7 +823,7 @@ void TestSomeCustomMessagesNeedGpsSomeDontWithGpsBadJs()
         SetSlot("slot3", msgDefSet,   jsUsesMsgBad);
         SetSlot("slot4", msgDefSet,   jsUsesBothBad);
         SetSlot("slot5", msgDefBlank, jsUsesNeitherBad);
-        scheduler->ConfigureWindowSlotBehavior(haveGpsLock);
+        scheduler->PrepareWindowSlotBehavior(haveGpsLock);
         scheduler->PrepareWindowSchedule(0);
 
         tedTestInner.SetCallback([id]{
@@ -875,7 +875,7 @@ void TestSomeCustomMessagesNeedGpsSomeDontNoGpsBadJs()
         SetSlot("slot3", msgDefSet,   jsUsesMsgBad);
         SetSlot("slot4", msgDefSet,   jsUsesBothBad);
         SetSlot("slot5", msgDefBlank, jsUsesNeitherBad);
-        scheduler->ConfigureWindowSlotBehavior(haveGpsLock);
+        scheduler->PrepareWindowSlotBehavior(haveGpsLock);
         scheduler->PrepareWindowSchedule(0);
 
         tedTestInner.SetCallback([id]{
@@ -922,7 +922,7 @@ void TestOverrideBasicTelemetryButBadJs()
         SetSlot("slot3", msgDefBlank, jsUsesNeitherBad);
         SetSlot("slot4", msgDefBlank, jsUsesNeitherBad);
         SetSlot("slot5", msgDefBlank, jsUsesNeitherBad);
-        scheduler->ConfigureWindowSlotBehavior(haveGpsLock);
+        scheduler->PrepareWindowSlotBehavior(haveGpsLock);
         scheduler->PrepareWindowSchedule(0);
 
         tedTestInner.SetCallback([id]{
@@ -969,7 +969,7 @@ void TestOverrideBasicTelemetryNoGpsButBadJs()
         SetSlot("slot3", msgDefBlank, jsUsesNeitherBad);
         SetSlot("slot4", msgDefBlank, jsUsesNeitherBad);
         SetSlot("slot5", msgDefBlank, jsUsesNeitherBad);
-        scheduler->ConfigureWindowSlotBehavior(haveGpsLock);
+        scheduler->PrepareWindowSlotBehavior(haveGpsLock);
         scheduler->PrepareWindowSchedule(0);
 
         tedTestInner.SetCallback([id]{

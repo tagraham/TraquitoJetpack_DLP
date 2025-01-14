@@ -3,6 +3,7 @@
 #include "CopilotControlJavaScript.h"
 #include "CopilotControlMessageDefinition.h"
 #include "Evm.h"
+#include "GPS.h"
 #include "Log.h"
 #include "Shell.h"
 #include "Timeline.h"
@@ -43,14 +44,191 @@ public:
     }
 
 
-// private:
+    /////////////////////////////////////////////////////////////////
+    // Callback Setting - GPS Operation
+    /////////////////////////////////////////////////////////////////
 
+private:
+
+    function<void()> fnCbRequestNewGpsLock_ = []{};
+
+    void RequestNewGpsLock()
+    {
+        fnCbRequestNewGpsLock_();
+    }
+
+public:
+
+    void SetCallbackRequestNewGpsLock(function<void()> fn)
+    {
+        fnCbRequestNewGpsLock_ = fn;
+    }
+
+
+    /////////////////////////////////////////////////////////////////
+    // Callback Setting - Message Sending
+    /////////////////////////////////////////////////////////////////
+
+private:
+
+    function<void()> fnCbSendRegularType1_   = []{};
+    function<void()> fnCbSendBasicTelemetry_ = []{};
+    function<void()> fnCbSendUserDefined_    = []{};
+
+    void SendRegularType1()
+    {
+        Mark("SEND_REGULAR_TYPE1");
+        fnCbSendRegularType1_();
+    }
+
+    void SendBasicTelemetry()
+    {
+        Mark("SEND_BASIC_TELEMETRY");
+        fnCbSendBasicTelemetry_();
+    }
+
+    void SendCustomMessage()
+    {
+        Mark("SEND_CUSTOM_MESSAGE");
+        fnCbSendUserDefined_();
+    }
+
+public:
+
+    void SetCallbackSendRegularType1(function<void()> fn)
+    {
+        fnCbSendRegularType1_ = fn;
+    }
+
+    void SetCallbackSendBasicTelemetry(function<void()> fn)
+    {
+        fnCbSendBasicTelemetry_ = fn;
+    }
+
+    void SetCallbackSendUserDefined(function<void()> fn)
+    {
+        fnCbSendUserDefined_ = fn;
+    }
+
+
+    /////////////////////////////////////////////////////////////////
+    // Callback Setting - Radio
+    /////////////////////////////////////////////////////////////////
+
+private:
+
+    function<bool()> fnCbRadioIsActive_     = []{ return false; };
+    function<void()> fnCbStartRadioWarmup_  = []{};
+    function<void()> fnCbStopRadio_         = []{};
+
+    bool RadioIsActive()
+    {
+        return fnCbRadioIsActive_();
+    }
+
+    void StartRadioWarmup()
+    {
+        Mark("ENABLE_RADIO");
+        fnCbStartRadioWarmup_();
+    }
+
+    void StopRadio()
+    {
+        Mark("DISABLE_RADIO");
+        fnCbStopRadio_();
+    }
+
+public:
+
+    void SetCallbackRadioIsActive(function<bool()> fn)
+    {
+        fnCbRadioIsActive_ = fn;
+    }
+
+    void SetCallbackStartRadioWarmup(function<void()> fn)
+    {
+        fnCbStartRadioWarmup_ = fn;
+    }
+
+    void SetCallbackStopRadio(function<void()> fn)
+    {
+        fnCbStopRadio_ = fn;
+    }
+
+
+    /////////////////////////////////////////////////////////////////
+    // Callback Setting - Speed Settings
+    /////////////////////////////////////////////////////////////////
+
+private:
+
+    function<void()> fnCbGoHighSpeed_ = []{};
+    function<void()> fnCbGoLowSpeed_  = []{};
+
+    void GoHighSpeed()
+    {
+        Mark("GO_HIGH_SPEED");
+        fnCbGoHighSpeed_();
+    }
+
+    void GoLowSpeed()
+    {
+        Mark("GO_LOW_SPEED");
+        fnCbGoLowSpeed_();
+    }
+
+
+public:
+
+    void SetCallbackGoHighSpeed(function<void()> fn)
+    {
+        fnCbGoHighSpeed_ = fn;
+    }
+
+    void SetCallbackGoLowSpeed(function<void()> fn)
+    {
+        fnCbGoLowSpeed_ = fn;
+    }
+
+
+    /////////////////////////////////////////////////////////////////
+    // Kickoff
+    /////////////////////////////////////////////////////////////////
+
+    void Start()
+    {
+        RequestNewGpsLock();
+    }
 
 
     /////////////////////////////////////////////////////////////////
     // Event Handling
     /////////////////////////////////////////////////////////////////
 
+public:
+
+
+private:
+    Fix3DPlus gpsFix_;
+public:
+
+    void OnGpsLock(uint8_t windowStartMin, Fix3DPlus &gpsFix)
+    {
+        Mark("ON_GPS_LOCK");
+
+        // calculate window start
+        uint64_t timeAtWindowStartMs =
+            CalculateTimeAtWindowStartMs(windowStartMin,
+                                         gpsFix.minute,
+                                         gpsFix.second,
+                                         gpsFix.millisecond);
+
+        // cache gps fix
+        gpsFix_ = gpsFix;
+
+        // prepare
+        PrepareWindow(timeAtWindowStartMs, true);
+    }
 
     // Handle scenario where only the GPS time lock happens.
     // Helps in scenario where no GPS lock ever happened yet, so we can coast on this.
@@ -58,12 +236,15 @@ public:
     // Make sure to wait for good non-ms time.
         // Unsure whether this even occurs in the sky when I can't get a lock anyway.
         // Can implement the feature, though.
-    void OnGpsTimeLockOnly()
+    void OnGpsLockTimeOnly()
     {
 
     }
 
 
+
+
+private:
 
     bool inWindowCurrently_ = false;
 
@@ -76,21 +257,15 @@ public:
 
 
 
-
-
-
-    bool gpsHasLock_ = false;
-
-    void OnGpsLock(uint8_t gpsTimeMin, uint8_t gpsTimeSec, uint16_t gpsTimeMs)
+    static uint64_t CalculateTimeAtWindowStartMs(uint8_t windowStartMin, uint8_t gpsTimeMin, uint8_t gpsTimeSec, uint16_t gpsTimeMs)
     {
-        // you get the lock and now know exactly what time it is
+        uint64_t retVal = 0;
 
-        // calculate the time of the next starting window as a moment in the future
-            // an absolute time
-        uint64_t timeAtWindowStartMs = 0;
+        return retVal;
+    }
 
-
-
+    void PrepareWindow(uint64_t timeAtWindowStartMs, bool haveGpsLock)
+    {
         if (inWindowCurrently_)
         {
             // coasting
@@ -104,7 +279,7 @@ public:
             {
                 // configure slot behavior knowing we have a gps lock
                 // 100ms
-                ConfigureWindowSlotBehavior(gpsHasLock_);
+                PrepareWindowSlotBehavior(haveGpsLock);
 
                 // schedule actions based on when the next 10-min window is
                 // 6ms
@@ -127,6 +302,22 @@ public:
 
 
 
+
+
+
+
+
+
+
+
+
+
+    /////////////////////////////////////////////////////////////////
+    // Internal
+    /////////////////////////////////////////////////////////////////
+
+private:
+public:     // fix, for testing atm
 
 
 
@@ -204,7 +395,7 @@ public:
         if (slotStateNext && slotNameNext && slotStateNext->slotBehavior.runJs)
         {
             Mark("JS_EXEC");
-            slotStateNext->jsRanOk = RunSlotJavaScript(slotNameNext);
+            slotStateNext->jsRanOk = RunSlotJavaScript(slotNameNext, &gpsFix_);
         }
         else
         {
@@ -213,8 +404,7 @@ public:
     };
 
 
-
-    void ConfigureWindowSlotBehavior(bool haveGpsLock)
+    void PrepareWindowSlotBehavior(bool haveGpsLock)
     {
         // reset state
         slotState1_.jsRanOk = false;
@@ -386,7 +576,7 @@ public:
         uint64_t timeAtTxWarmup = 0;
         tedTxWarmup_.SetCallback([this]{
             Mark("TX_WARMUP");
-            // enable warmup
+            StartRadioWarmup();
         }, "TX_WARMUP");
         tedTxWarmup_.RegisterForTimedEventAt(timeAtTxWarmup);
         Log("Scheduled TX_WARMUP for ", TimestampFromMs(timeAtTxWarmup));
@@ -475,8 +665,10 @@ public:
             Mark("TX_DISABLE_GPS_ENABLE");
 
             // disable transmitter
-            // enable gps
+            StopRadio();
 
+            // enable gps
+            RequestNewGpsLock();
 
 
             // setup coast directly from here?
@@ -502,50 +694,33 @@ public:
     {
         bool retVal = true;
 
+        // cache whether radio enabled to know if to disable/re-enable
+        bool radioActive = RadioIsActive();
 
-        // actually, detect if the radio is on or not, and disable/enable as appropriate.
-
-        // slots will run this command not knowing whether the radio is on or not
-
-
-        if (operateRadio)
+        if (radioActive)
         {
-            // disable transmitter
+            StopRadio();
         }
 
         // change to 48MHz
-        auto jsResult = js_.RunSlotJavaScript(slotName);
-        retVal = jsResult.runOk;
-        // change to 6MHz
+        GoHighSpeed();
 
-        if (operateRadio)
+        // invoke js
+        auto jsResult = js_.RunSlotJavaScript(slotName, &gpsFix_);
+        retVal = jsResult.runOk;
+
+        // change to 6MHz
+        GoLowSpeed();
+
+        if (radioActive)
         {
-            // enable transmitter
+            StartRadioWarmup();
         }
 
         return retVal;
     }
 
-    /////////////////////////////////////////////////////////////////
-    // Message Sending
-    /////////////////////////////////////////////////////////////////
 
-    void SendRegularType1()
-    {
-        Mark("SEND_REGULAR_TYPE1");
-    }
-
-    void SendBasicTelemetry()
-    {
-        Mark("SEND_BASIC_TELEMETRY");
-    }
-
-    void SendCustomMessage()
-    {
-        Mark("SEND_CUSTOM_MESSAGE");
-    }
-
-    
     /////////////////////////////////////////////////////////////////
     // Utility
     /////////////////////////////////////////////////////////////////
@@ -644,7 +819,6 @@ public:
         }, { .argCount = 0, .help = ""});
 
         Shell::AddCommand("test.l", [&](vector<string> argList){
-            OnGpsLock(0, 0, 0);
         }, { .argCount = 0, .help = ""});
 
         Shell::AddCommand("test.cfg", [&](vector<string> argList){
@@ -652,7 +826,6 @@ public:
         }, { .argCount = 0, .help = "run test suite for slot behavior"});
 
         Shell::AddCommand("test.gps", [&](vector<string> argList){
-            gpsHasLock_ = (bool)atoi(argList[0].c_str());
         }, { .argCount = 1, .help = "set whether gps has lock or not (1 or 0)"});
     }
 
