@@ -14,6 +14,12 @@ public:
         CopilotControlConfiguration::SetupJSON();
     }
 
+    CopilotControlScheduler &GetScheduler()
+    {
+        return ccs_;
+    }
+
+
 private:
 
     CopilotControlScheduler ccs_;
