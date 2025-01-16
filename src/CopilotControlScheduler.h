@@ -209,195 +209,412 @@ public:
     }
 
 
-    /////////////////////////////////////////////////////////////////
-    // Kickoff
-    /////////////////////////////////////////////////////////////////
-
-    void Start()
-    {
-        RequestNewGpsLock();
-    }
-
 
     /////////////////////////////////////////////////////////////////
     // Event Handling
     /////////////////////////////////////////////////////////////////
 
+    // The scheduler manages running the the schedule, and accepts
+    // two types of inputs from the caller:
+    // - Configuration
+    // - Events
+    //
+    // Configuration consists of:
+    // - callbacks the scheduler needs to operate
+    // - data the scheduler needs to operate
+    //
+    // Events consist of:
+    // - Start / Stop events
+    // - GPS events
+    //
+    //
+    // The operational model is:
+    // - There are two primary schedule states when running
+    //   - unlocked
+    //   - locked
+    // - The locked state means:
+    //   - The schedule is currently running
+    //   - No changes to the schedule can be made
+    //   - New GPS data is queued to be applied later
+    // - The unlocked state means:
+    //   - The schedule is not currently running
+    //   - Changes to the schedule can be made any number of times
+    //   - New GPS data is applied immediately
+    //
+    // During both the locked and unlocked states, GPS events can be handled.
+    //
+    // During the unlocked state
+    // - GPS Time event
+    //   - time synchronized
+    //   - Coast eligible
+    //   - if no current 3DFix, schedule a no-gps-fix window
+    // - GPS 3DFix event
+    //   - time synchronized
+    //   - schedule a gps-fix window
+    //
+    // During the locked state
+    // - GPS Time event
+    //   - cached
+    // - GPS 3DFix event
+    //   - cached
+    //
+    //
+    // OnWindowLockoutEnd
+    // - destroy current gps data
+    // - if any cached data
+    //   - apply best cached GPS data
+    //     - need to retroactively apply time sync (timestamp at time of reception I guess)
+    // - if no cached data
+    //   - schedule a no-gps-fix window
+    //
+    //
+    // OnStop
+    // - cancel all async events
+    // - destroy all data (except coast flag)
+    // - end lockout
+    //
+    // OnStart
+    // - if coast eligible, schedule a no-gps-fix window
+    //
+    //
+    //
+    // Coasting
+    // - if a gps time lock has ever once been acquired, coasting is possible.
+    //
+    //
 
 
-    // A window can be in progress, or not.
-        // We can accept GPS time and GPS locks in both.
 
 
 
+    /////////////////////////////////////////////////////////////////
+    // Start / Stop Events
+    /////////////////////////////////////////////////////////////////
 
-    // there will sometimes be a gps lock that happens while the window is
-    // still processing. this is ok.
-        // this would be during js-only execution of slots that don't want to tx.
-        // we have to let those run.
-    // we cache these events
-    // when window ends, schedule based on newly-cached data (or coast).
-    // should be fine to receive multiple gps locks at any time at all
-        // we keep state to know whether and when to apply
-        // this would allow time-only gps and 3dplus locks to accumulate
-        // and we don't care, just cache
-    // when window time ends, if no cache, schedule coast
+    bool running_ = false;
+
+    void Start()
+    {
+        if (running_ == true) { return; }
+
+        Stop();
+        running_ = true;
+
+        RequestNewGpsLock();
+    }
+
+    void Stop()
+    {
+        if (running_ == false) { return; }
+
+        running_ = false;
+
+        // reset gps state
+        scheduleDataActive_ = ScheduleData{};
+        scheduleDataCache_  = ScheduleData{};
+
+        // end schedule lockout
+        inLockout_ = false;
+
+        // cancel schedule actions
+        tedScheduleLockOutStart_.DeRegisterForTimedEvent();
+        tedPeriod0_.DeRegisterForTimedEvent();
+        tedTxWarmup_.DeRegisterForTimedEvent();
+        tedPeriod1_.DeRegisterForTimedEvent();
+        tedPeriod2_.DeRegisterForTimedEvent();
+        tedPeriod3_.DeRegisterForTimedEvent();
+        tedPeriod4_.DeRegisterForTimedEvent();
+        tedPeriod5_.DeRegisterForTimedEvent();
+        tedTxDisableGpsEnable_.DeRegisterForTimedEvent();
+        tedScheduleLockOutEnd_.DeRegisterForTimedEvent();
+    }
 
 
+    /////////////////////////////////////////////////////////////////
+    // GPS Events
+    /////////////////////////////////////////////////////////////////
+
+    // data that is used in and out of lockout
+    struct ScheduleData
+    {
+        uint64_t  timeAtGpsFix3DPlusSetUs = 0;
+        Fix3DPlus gpsFix3DPlus;
+
+        uint64_t timeAtGpsFixTimeSetUs = 0;
+        FixTime  gpsFixTime;
+    };
+
+    // cache for data acquired during lockout
+    ScheduleData scheduleDataCache_;
+
+    // schedule data being actively used outside lockout
+    ScheduleData scheduleDataActive_;
 
 
+    void OnGps3DPlusLock(const Fix3DPlus &gpsFix3DPlus)
+    {
+        if (running_ == false) { return; }
+
+        uint64_t timeNowUs = PAL.Micros();
+
+        if (!inLockout_)
+        {
+            Mark("ON_GPS_3D_PLUS_LOCK");
+            LogNL();
+
+            // set active data
+            scheduleDataActive_.timeAtGpsFix3DPlusSetUs = timeNowUs;
+            scheduleDataActive_.gpsFix3DPlus            = gpsFix3DPlus;
+
+            // apply
+            ScheduleApplyTimeAndUpdateSchedule(scheduleDataActive_.gpsFix3DPlus,
+                                               scheduleDataActive_.timeAtGpsFix3DPlusSetUs,
+                                               true);
+        }
+        else
+        {
+            Mark("ON_GPS_LOCK_3D_PLUS_DURING_LOCKOUT");
+            LogNL();
+
+            // cache
+            scheduleDataCache_.timeAtGpsFix3DPlusSetUs = timeNowUs;
+            scheduleDataCache_.gpsFix3DPlus            = gpsFix3DPlus;
+        }
+    }
+
+    void OnGpsTimeLock(const FixTime &gpsFixTime)
+    {
+        if (running_ == false) { return; }
+
+        uint64_t timeNowUs = PAL.Micros();
+
+        if (!inLockout_)
+        {
+            Mark("ON_GPS_TIME_LOCK");
+            LogNL();
+
+            // set active data
+            scheduleDataActive_.timeAtGpsFixTimeSetUs = timeNowUs;
+            scheduleDataActive_.gpsFixTime            = gpsFixTime;
+
+            // Don't override an existing 3D fix
+            if (scheduleDataActive_.timeAtGpsFix3DPlusSetUs == 0)
+            {
+                // apply
+                ScheduleApplyTimeAndUpdateSchedule(scheduleDataActive_.gpsFixTime,
+                                                   scheduleDataActive_.timeAtGpsFixTimeSetUs,
+                                                   false);
+            }
+            else
+            {
+                // nothing to do
+            }
+        }
+        else
+        {
+            Mark("ON_GPS_LOCK_TIME_DURING_LOCKOUT");
+            LogNL();
+
+            // cache
+            scheduleDataCache_.timeAtGpsFixTimeSetUs = timeNowUs;
+            scheduleDataCache_.gpsFixTime            = gpsFixTime;
+        }
+    }
 
 
-
-
-public:
-
+    /////////////////////////////////////////////////////////////////
+    // Schedule Lockout Events
+    /////////////////////////////////////////////////////////////////
 
 private:
-    Fix3DPlus gpsFix_;
-public:
 
-    void OnGpsLock(const Fix3DPlus &gpsFix)
+    bool inLockout_ = false;
+
+    void OnScheduleLockoutStart()
     {
-        // set the system time
-        SetTimeFromGpsTime(gpsFix);
+        inLockout_ = true;
+
+        // run at 6MHz?
+    }
+
+    void OnScheduleLockoutEnd()
+    {
+        inLockout_ = false;
+
+        // run at 48MHz?
+
+        // apply cached data
+        ScheduleApplyCache();
+    }
+
+
+    /////////////////////////////////////////////////////////////////
+    // Schedule Tasks
+    /////////////////////////////////////////////////////////////////
+
+private:
+
+    void ScheduleApplyCache()
+    {
+        // Update active data with cached data.
+        //
+        // The cache is applied after a window has completed, meaning there is guaranteed
+        // to be valid gps data in the active data.
+        //
+        // There is no guarantee that there is any data at all in the cache.
+        //
+        // Only overwrite the active data with new data from the cache.
+        bool fix3dPlusFresh = false;
+        if (scheduleDataCache_.timeAtGpsFix3DPlusSetUs)
+        {
+            fix3dPlusFresh = true;
+            scheduleDataActive_.timeAtGpsFix3DPlusSetUs = scheduleDataCache_.timeAtGpsFix3DPlusSetUs;
+            scheduleDataActive_.gpsFix3DPlus            = scheduleDataCache_.gpsFix3DPlus;
+        }
+
+        bool fixTimeFresh = false;
+        if (scheduleDataCache_.timeAtGpsFixTimeSetUs)
+        {
+            fixTimeFresh = true;
+            scheduleDataActive_.timeAtGpsFixTimeSetUs = scheduleDataCache_.timeAtGpsFixTimeSetUs;
+            scheduleDataActive_.gpsFixTime            = scheduleDataCache_.gpsFixTime;
+        }
+
+        // Reset cache
+        scheduleDataCache_ = ScheduleData{};
+
+        // Schedule using best data available
+        if (fix3dPlusFresh)
+        {
+            // new 3d lock
+            Mark("APPLY_CACHE_NEW_3D_PLUS");
+            ScheduleApplyTimeAndUpdateSchedule(scheduleDataActive_.gpsFix3DPlus,
+                                               scheduleDataActive_.timeAtGpsFix3DPlusSetUs,
+                                               true);
+        }
+        else if (fixTimeFresh)
+        {
+            // no lock, but there's an updated time
+            Mark("APPLY_CACHE_NEW_TIME");
+            ScheduleApplyTimeAndUpdateSchedule(scheduleDataActive_.gpsFixTime,
+                                               scheduleDataActive_.timeAtGpsFixTimeSetUs,
+                                               false);
+        }
+        else if (scheduleDataCache_.timeAtGpsFix3DPlusSetUs >= scheduleDataCache_.timeAtGpsFixTimeSetUs)
+        {
+            // no lock, and old 3dfix has most recent time
+            Mark("APPLY_CACHE_OLD_3D_PLUS");
+            ScheduleApplyTimeAndUpdateSchedule(scheduleDataActive_.gpsFix3DPlus,
+                                               scheduleDataActive_.timeAtGpsFix3DPlusSetUs,
+                                               false);
+        }
+        else
+        {
+            // no lock, and old time has most recent time
+            Mark("APPLY_CACHE_OLD_TIME");
+            ScheduleApplyTimeAndUpdateSchedule(scheduleDataActive_.gpsFixTime,
+                                               scheduleDataActive_.timeAtGpsFixTimeSetUs,
+                                               false);
+        }
+    }
+
+    void ScheduleApplyTimeAndUpdateSchedule(const FixTime &gpsFixTime, uint64_t timeAtGpsFixTimeSetUs, bool haveGpsLock)
+    {
+        Mark("APPLY_TIME_AND_UPDATE_SCHEDULE");
         LogNL();
 
-        Mark("ON_GPS_LOCK");
+        // set the notional time
+        SetNotionalTimeFromGpsTime(gpsFixTime, timeAtGpsFixTimeSetUs);
         LogNL();
 
-        // cache gps fix
-        gpsFix_ = gpsFix;
+        // schedule
+        ScheduleUpdateSchedule(haveGpsLock);
+    }
 
-        // learn what the system clock was the moment we aligned to gps time.
-        // we want to work in system time, but display everything in gps time.
-        uint64_t timeAtGpsFixUs = Time::GetSystemUsAtLastTimeChange();
+    void ScheduleUpdateSchedule(bool haveGpsLock)
+    {
+        uint64_t timeNowUs = PAL.Micros();
+
+        // we know that the notional time is sync'd to gps.
+        // use the current time to get the gps time, and use that to calculate time
+        // at next window.
+        auto timePoint = Time::ParseDateTime(Time::GetNotionalDateTimeFromSystemUs(timeNowUs));
 
         // calculate window start
-        uint64_t timeAtWindowStartUs = CalculateTimeAtWindowStartUs(startMin_, gpsFix, timeAtGpsFixUs);
+        uint64_t timeAtWindowStartUs =
+            CalculateTimeAtWindowStartUs(
+                startMin_,
+                timePoint.minute,
+                timePoint.second,
+                timePoint.us,
+                timeNowUs);
 
-        Log("Duration before window start: ", Time::MakeDurationFromUs(timeAtWindowStartUs - timeAtGpsFixUs));
+        string durationStr = Time::MakeDurationFromUs(timeAtWindowStartUs - timeNowUs);
+
+        Log("Time at window :  ", Time::GetNotionalDateTimeFromSystemUs(timeAtWindowStartUs));
+        Log("Time now       :  ", Time::GetNotionalDateTimeFromSystemUs(timeNowUs));
+        Log("Duration before:              ", durationStr);
         LogNL();
 
         // prepare
-        PrepareWindow(timeAtGpsFixUs, timeAtWindowStartUs, true);
+        ScheduleWindow(timeNowUs, timeAtWindowStartUs, haveGpsLock);
     }
 
-
-
-
-
-
-
-    // Handle scenario where only the GPS time lock happens.
-    // Helps in scenario where no GPS lock ever happened yet, so we can coast on this.
-    // Also will correct any drift in current coasting.
-    // Make sure to wait for good non-ms time.
-        // Unsure whether this even occurs in the sky when I can't get a lock anyway.
-        // Can implement the feature, though.
-    void OnGpsLockTimeOnly()
+    void ScheduleWindow(uint64_t timeNowUs, uint64_t timeAtWindowStartUs, bool haveGpsLock)
     {
-        // adjust local wall clock time?
-        // re-schedule everything?
-            // when not already in a window presumably
+        // configure slot behavior knowing we have a gps lock
+        // 100ms
+        PrepareWindowSlotBehavior(haveGpsLock);
+
+        // schedule actions based on when the next 10-min window is
+        // 6ms
+        PrepareWindowSchedule(timeNowUs, timeAtWindowStartUs);
     }
 
+
+
+    // eyeballing the speed of scheduling at 6MHz, it's bad. like really bad.
+        // more testing required
+    // but yeah, if we're ok to run JS at 48MHz, why not run that way all the time?
+        // or, at least run that way when doing scheduling?
+            // I mean, how long does it take to switch freqs vs
+            // the time savings of operating at 48MHz during scheduling?
 
 
 
 private:
 
-    bool inWindowCurrently_ = false;
-
-    // coast handler
-    void OnNextWindowNoGpsLock()
-    {
-        inWindowCurrently_ = true;
-        // ...
-    }
-
-
-
-
-    uint64_t CalculateTimeAtWindowStartUs(uint8_t windowStartMin, const FixTime &gpsFix, uint64_t timeAtGpsFixUs)
+    uint64_t CalculateTimeAtWindowStartUs(uint8_t windowStartMin, uint8_t gpsMin, uint8_t gpsSec, uint32_t gpsUs, uint64_t timeNowUs)
     {
         // calculate how far into the future the start minute is from gps time
         // by modelling a min/sec/ms clock and subtracting gps time from the window time.
         // the window is nominally at <m>:01.000.
-        int8_t  minDiff = (int8_t)(windowStartMin - (gpsFix.minute % 10));
-        int8_t  secDiff = (int8_t)(1              - gpsFix.second);
-        int16_t msDiff  = (int16_t)               - gpsFix.millisecond;
+        int8_t  minDiff = (int8_t)(windowStartMin - (gpsMin % 10));
+        int8_t  secDiff = (int8_t)(1              - gpsSec);
+        int32_t usDiff  = (int32_t)               - gpsUs;
 
         // then, since you know how far into the future the window start is from the
         // gps time, you add that duration onto the gps time and arrive at the window
         // start time.
-        int64_t totalDiffMs = 0;
-        totalDiffMs += minDiff *      60 * 1'000;
-        totalDiffMs +=           secDiff * 1'000;
-        totalDiffMs +=                     msDiff;
+        int64_t totalDiffUs = 0;
+        totalDiffUs += minDiff *      60 * 1'000 * 1'000;
+        totalDiffUs +=           secDiff * 1'000 * 1'000;
+        totalDiffUs +=                     usDiff;
 
         // the exception is when the duration is negative, in which case you just add
         // 10 minutes.
-        if (totalDiffMs < 0)
+        if (totalDiffUs < 0)
         {
-            totalDiffMs += 10 * 60 * 1'000;
+            totalDiffUs += 10 * 60 * 1'000 * 1'000;
         }
 
         // calculate window start time by offset from gps time now
-        uint64_t timeAtWindowStartUs = timeAtGpsFixUs + (totalDiffMs * 1'000);
+        uint64_t timeAtWindowStartUs = timeNowUs + totalDiffUs;
 
         return timeAtWindowStartUs;
     }
 
     void TestCalculateTimeAtWindowStartUs(bool fullSweep = false);
-
-
-    void PrepareWindow(uint64_t timeAtGpsFixUs, uint64_t timeAtWindowStartUs, bool haveGpsLock)
-    {
-        if (inWindowCurrently_)
-        {
-            // coasting
-        }
-        else
-        {
-            // not coasting
-
-            // if time available to execute javascript for slot1 (required)
-                // taking into account warmup period
-            {
-                // configure slot behavior knowing we have a gps lock
-                // 100ms
-                PrepareWindowSlotBehavior(haveGpsLock);
-
-                // schedule actions based on when the next 10-min window is
-                // 6ms
-                PrepareWindowSchedule(timeAtGpsFixUs, timeAtWindowStartUs);
-            }
-            // else
-            {
-                // trigger coast
-                // this is exactly the same as getting a gps lock within a
-                // window which has started already
-            }
-        }
-    }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
     /////////////////////////////////////////////////////////////////
@@ -663,9 +880,25 @@ public: // for test running
     // Window Schedule
     /////////////////////////////////////////////////////////////////
 
+
+
+
+    // have to change window lockout start
+        // come after warmup and before JS
+    // need to be able to get a good gps lock until as late as possible
+        // the way it works currently leaves no room
+            // how bad does it get in slot 5? pretty bad I think.
+                // figure it out for now and what happens later when fixed
+
+
+
+
+
+
+
     // called when there is known to be enough time to do the work
     // required (eg run some js and schedule stuff)
-    void PrepareWindowSchedule(uint64_t timeAtGpsFixUs, uint64_t timeAtWindowStartUs)
+    void PrepareWindowSchedule(uint64_t timeNowUs, uint64_t timeAtWindowStartUs)
     {
         Log("PrepareWindowSchedule for ", TimeAt(timeAtWindowStartUs));
 
@@ -692,21 +925,21 @@ public: // for test running
         // - running initial js
         // - warmup
         //
-        // Window Lock Out Start precedes all other events.
+        // Schedule Lock Out Start precedes all other events.
         // It should start early enough that both the initial JS and warmup
         // have time to execute.
         const uint64_t DURATION_WANT_PRE_WINDOW_US  = DURATION_JS_US + DURATION_WARMUP_US;
-        const uint64_t DURATION_AVAIL_PRE_WINDOW_US = timeAtWindowStartUs - timeAtGpsFixUs;
+        const uint64_t DURATION_AVAIL_PRE_WINDOW_US = timeAtWindowStartUs - timeNowUs;
         const uint64_t DURATION_USE_PRE_WINDOW_US   = min(DURATION_WANT_PRE_WINDOW_US, DURATION_AVAIL_PRE_WINDOW_US);
 
         // pre-window start time
         const uint64_t TIME_AT_PRE_WINDOW_START_US = timeAtWindowStartUs - DURATION_USE_PRE_WINDOW_US;
 
-        // Schedule Window Lock Out Start
-        const uint64_t TIME_AT_WINDOW_LOCK_OUT_START_US = TIME_AT_PRE_WINDOW_START_US;
+        // Schedule Schedule Lock Out Start
+        const uint64_t TIME_AT_SCHEDULE_LOCK_OUT_START_US = TIME_AT_PRE_WINDOW_START_US;
 
         // js start time
-        const uint64_t TIME_AT_JS_RUN_US = TIME_AT_WINDOW_LOCK_OUT_START_US;
+        const uint64_t TIME_AT_JS_RUN_US = TIME_AT_SCHEDULE_LOCK_OUT_START_US;
 
         // warmup start time
         // Set as far back as you can from the window start time, based on when it is now.
@@ -775,24 +1008,26 @@ public: // for test running
         if (PeriodWillTransmit(4)) { TIME_AT_GPS_REQ_US = TIME_AT_PERIOD4_START_US; TIME_AT_GPS_REQ_RESCHEDULED = true; }
         if (PeriodWillTransmit(5)) { TIME_AT_GPS_REQ_US = TIME_AT_PERIOD5_START_US; TIME_AT_GPS_REQ_RESCHEDULED = true; }
 
-        // Schedule Window End.
+        // Schedule Lock Out End.
         //
         // This event should come after the final period of work.
         //
-        // It is no harm to end the window period after the 5th period
+        // It is no harm to end the lock out period after the 5th period
         // even if no work gets done.
-        const uint64_t TIME_AT_WINDOW_LOCK_OUT_END_US = TIME_AT_PERIOD5_START_US;
+        const uint64_t TIME_AT_SCHEDULE_LOCK_OUT_END_US = TIME_AT_PERIOD5_START_US;
 
 
 
 
 
-        // Setup Window Lock Out Start.
-        tedWindowLockOutStart_.SetCallback([this]{
-            Mark("WINDOW_LOCK_OUT_START");
-        }, "WINDOW_LOCK_OUT_START");
-        tedWindowLockOutStart_.RegisterForTimedEventAt(Micros{TIME_AT_WINDOW_LOCK_OUT_START_US});
-        Log("Scheduled ", TimeAt(TIME_AT_WINDOW_LOCK_OUT_START_US), " for WINDOW_LOCK_OUT_START");
+        // Setup Schedule Lock Out Start.
+        tedScheduleLockOutStart_.SetCallback([this]{
+            Mark("SCHEDULE_LOCK_OUT_START");
+
+            OnScheduleLockoutStart();
+        }, "SCHEDULE_LOCK_OUT_START");
+        tedScheduleLockOutStart_.RegisterForTimedEventAt(Micros{TIME_AT_SCHEDULE_LOCK_OUT_START_US});
+        Log("Scheduled ", TimeAt(TIME_AT_SCHEDULE_LOCK_OUT_START_US), " for SCHEDULE_LOCK_OUT_START");
         Log("    ", Time::MakeDurationFromUs(DURATION_WANT_PRE_WINDOW_US), " early wanted");
         Log("    ", Time::MakeDurationFromUs(DURATION_AVAIL_PRE_WINDOW_US), " early was possible");
         Log("    ", Time::MakeDurationFromUs(DURATION_USE_PRE_WINDOW_US), " early used");
@@ -908,17 +1143,20 @@ public: // for test running
 
 
 
-        // Setup Window End.
-        tedWindowLockOutEnd_.SetCallback([this]{
-            Mark("WINDOW_LOCK_OUT_END");
+        // Setup Schedule Lock Out End.
+        tedScheduleLockOutEnd_.SetCallback([this]{
+            Mark("SCHEDULE_LOCK_OUT_END");
 
             if (IsTesting() == false)
             {
-                t_.Report();
+                // report now because new events are going to happen immediately
+                t_.ReportNow();
             }
-        }, "WINDOW_LOCK_OUT_END");
-        tedWindowLockOutEnd_.RegisterForTimedEventAt(Micros{TIME_AT_WINDOW_LOCK_OUT_END_US});
-        Log("Scheduled ", TimeAt(TIME_AT_WINDOW_LOCK_OUT_END_US), " for WINDOW_LOCK_OUT_END");
+
+            OnScheduleLockoutEnd();
+        }, "SCHEDULE_LOCK_OUT_END");
+        tedScheduleLockOutEnd_.RegisterForTimedEventAt(Micros{TIME_AT_SCHEDULE_LOCK_OUT_END_US});
+        Log("Scheduled ", TimeAt(TIME_AT_SCHEDULE_LOCK_OUT_END_US), " for SCHEDULE_LOCK_OUT_END");
 
 
 
@@ -950,7 +1188,7 @@ public: // for test running
         GoHighSpeed();
 
         // invoke js
-        auto jsResult = js_.RunSlotJavaScript(slotName, &gpsFix_);
+        auto jsResult = js_.RunSlotJavaScript(slotName, &scheduleDataActive_.gpsFix3DPlus);
         retVal = jsResult.runOk;
 
         // change to 6MHz
@@ -1002,6 +1240,23 @@ public: // for test running
     }
 
 
+    bool useMarkList_ = false;
+
+    void SetUseMarkList(bool tf)
+    {
+        useMarkList_ = tf;
+
+        if (useMarkList_ == false)
+        {
+            id__markList_.clear();
+        }
+    }
+
+    bool UseMarkList()
+    {
+        return useMarkList_;
+    }
+
     int id_ = 0;
     unordered_map<int, vector<string>> id__markList_;
 
@@ -1045,7 +1300,7 @@ public: // for test running
 
         Log("[", TimeAt(timeUs), "] ", str);
 
-        if (IsTesting())
+        if (UseMarkList())
         {
             AddToMarkList(str);
         }
@@ -1057,7 +1312,7 @@ public: // for test running
     }
 
 
-    uint64_t MakeUsFromGps(const FixTime &gpsFix)
+    uint64_t MakeUsFromGps(const FixTime &gpsFixTime)
     {
         uint64_t retVal = 0;
 
@@ -1065,19 +1320,19 @@ public: // for test running
         // example observed time lock
         // GPS Time: 0000-00-00 23:10:28.000 UTC
 
-        if (gpsFix.year != 0)
+        if (gpsFixTime.year != 0)
         {
             // datetime available
-            retVal = Time::MakeUsFromDateTime(gpsFix.dateTime);
+            retVal = Time::MakeUsFromDateTime(gpsFixTime.dateTime);
         }
         else
         {
             // just time available
             string dt =
-                Time::MakeDateTime(gpsFix.hour,
-                                   gpsFix.minute,
-                                   gpsFix.second,
-                                   gpsFix.millisecond * 1'000);
+                Time::MakeDateTime(gpsFixTime.hour,
+                                   gpsFixTime.minute,
+                                   gpsFixTime.second,
+                                   gpsFixTime.millisecond * 1'000);
 
             retVal = Time::MakeUsFromDateTime(dt);
         }
@@ -1085,11 +1340,11 @@ public: // for test running
         return retVal;
     }
 
-    void SetTimeFromGpsTime(const FixTime &gpsFix)
+    void SetNotionalTimeFromGpsTime(const FixTime &gpsFixTime, uint64_t timeAtGpsFixTimeSetUs)
     {
-        uint64_t notionalTimeUs = MakeUsFromGps(gpsFix);
+        uint64_t notionalTimeUs = MakeUsFromGps(gpsFixTime);
 
-        int64_t offsetUs = Time::SetNotionalDateTimeUs(notionalTimeUs);
+        int64_t offsetUs = Time::SetNotionalDateTimeUs(notionalTimeUs, timeAtGpsFixTimeSetUs);
 
         Log("Time sync'd to GPS time: now ", Time::MakeDateTimeFromUs(notionalTimeUs));
 
@@ -1144,16 +1399,17 @@ public: // for test running
             string dateTime = "2025-01-01 12:09:50.000";
             auto tp = Time::ParseDateTime(dateTime);
 
-            Fix3DPlus gpsFix;
-            gpsFix.year        = tp.year;
-            gpsFix.hour        = tp.hour;
-            gpsFix.minute      = tp.minute;
-            gpsFix.second      = tp.second;
-            gpsFix.millisecond = tp.us / 1'000;
-            gpsFix.dateTime    = dateTime;
+            Fix3DPlus gpsFix3DPlus;
+            gpsFix3DPlus.year        = tp.year;
+            gpsFix3DPlus.hour        = tp.hour;
+            gpsFix3DPlus.minute      = tp.minute;
+            gpsFix3DPlus.second      = tp.second;
+            gpsFix3DPlus.millisecond = tp.us / 1'000;
+            gpsFix3DPlus.dateTime    = dateTime;
 
             SetStartMinute(0);
-            OnGpsLock(gpsFix);
+            Start();
+            OnGps3DPlusLock(gpsFix3DPlus);
         }, { .argCount = 0, .help = "test gps lock"});
     }
 
@@ -1166,7 +1422,7 @@ private:
     SlotState slotState4_;
     SlotState slotState5_;
 
-    TimedEventHandlerDelegate tedWindowLockOutStart_;
+    TimedEventHandlerDelegate tedScheduleLockOutStart_;
     TimedEventHandlerDelegate tedPeriod0_;
     TimedEventHandlerDelegate tedTxWarmup_;
     TimedEventHandlerDelegate tedPeriod1_;
@@ -1175,7 +1431,7 @@ private:
     TimedEventHandlerDelegate tedPeriod4_;
     TimedEventHandlerDelegate tedPeriod5_;
     TimedEventHandlerDelegate tedTxDisableGpsEnable_;
-    TimedEventHandlerDelegate tedWindowLockOutEnd_;
+    TimedEventHandlerDelegate tedScheduleLockOutEnd_;
 
     Timeline t_;
 

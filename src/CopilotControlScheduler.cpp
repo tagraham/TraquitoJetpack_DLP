@@ -1073,6 +1073,8 @@ void CopilotControlScheduler::TestPrepareWindowSchedule()
     Log("TestPrepareWindowSchedule Start");
     ResetTestDuration();
 
+    SetUseMarkList(true);
+
     // with good javascript
     TestDefaultWithGps();
     TestDefaultNoGps();
@@ -1099,6 +1101,8 @@ void CopilotControlScheduler::TestPrepareWindowSchedule()
     {
         static TimedEventHandlerDelegate tedRestore;
         tedRestore.SetCallback([this]{
+            SetUseMarkList(false);
+
             RestoreFiles();
         });
         tedRestore.RegisterForTimedEvent(NextTestDuration());
@@ -1147,27 +1151,20 @@ void CopilotControlScheduler::TestPrepareWindowSchedule()
 
 void CopilotControlScheduler::TestCalculateTimeAtWindowStartUs(bool fullSweep)
 {
-    auto GpsTime = [](const FixTime &gpsFix){
-        string time = Time::MakeDateTime(0, gpsFix.minute, gpsFix.second, gpsFix.millisecond * 1'000);
+    auto GpsTime = [](uint8_t gpsMin, uint8_t gpsSec, uint32_t gpsUs){
+        string time = Time::MakeDateTime(0, gpsMin, gpsSec, gpsUs);
         time = time.substr(14);         // get rid of leading date and hour
         time.resize(time.size() - 3);   // get rid of microseconds, leave just ms
         return time;
     };
 
-    auto Test = [&](uint8_t windowStartMin, uint8_t gpsMin, uint8_t gpsSec, uint16_t gpsMs, bool verbose = true) {
-        FixTime gpsFix = {
-            .minute      = gpsMin,
-            .second      = gpsSec,
-            .millisecond = gpsMs,
-        };
-
-        uint64_t timeAtWindowStartUs =
-            CalculateTimeAtWindowStartUs(windowStartMin, gpsFix, 0);
+    auto Test = [&](uint8_t windowStartMin, uint8_t gpsMin, uint8_t gpsSec, uint32_t gpsMs, bool verbose = true) {
+        uint64_t timeAtWindowStartUs = CalculateTimeAtWindowStartUs(windowStartMin, gpsMin, gpsSec, gpsMs * 1'000, 0);
 
         if (verbose)
         {
             string windowTimeTarget = string{" "} + to_string(windowStartMin) + ":01.000";
-            string gpsTime          = GpsTime(gpsFix);
+            string gpsTime          = GpsTime(gpsMin, gpsSec, gpsMs * 1'000);
 
             Log("Window Time Target: ", windowTimeTarget);
             Log("GPS Time          : ", gpsTime);
