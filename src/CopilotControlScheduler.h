@@ -571,24 +571,29 @@ private:
             uint64_t timeAtNextWindowStartUs = GetTimeAtNextWindowStartUs(&timeNowUs);
             uint64_t timeAtTriggerCoastUs = timeAtNextWindowStartUs - DURATION_SEVEN_SECS_US;
             tedCoast_.RegisterForTimedEventAt(Micros{timeAtTriggerCoastUs});
-            PrintCoastDetails(timeAtTriggerCoastUs, timeAtNextWindowStartUs, timeNowUs);
+            
+            Log("Coast Scheduled");
+            Log("Time now : ", Time::GetNotionalTimeFromSystemUs(timeNowUs));
+            PrintTimeAtDetails("Coast At ", timeNowUs, timeAtTriggerCoastUs);
+            PrintTimeAtDetails("Window At", timeNowUs, timeAtNextWindowStartUs);
         }
     }
 
     void ScheduleUpdateSchedule(bool haveGpsLock)
     {
+        Mark("UPDATE_SCHEDULE");
+
+        // get current time and time of next window
         uint64_t timeNowUs;
-        uint64_t timeAtWindowStartUs = GetTimeAtNextWindowStartUs(&timeNowUs);
+        uint64_t timeAtNextWindowStartUs = GetTimeAtNextWindowStartUs(&timeNowUs);
 
-        string durationStr = Time::MakeDurationFromUs(timeAtWindowStartUs - timeNowUs);
-
-        Log("Time at window :  ", Time::GetNotionalDateTimeFromSystemUs(timeAtWindowStartUs));
-        Log("Time now       :  ", Time::GetNotionalDateTimeFromSystemUs(timeNowUs));
-        Log("Duration before:              ", durationStr);
+        // logging
+        Log("Time now : ", Time::GetNotionalTimeFromSystemUs(timeNowUs));
+        PrintTimeAtDetails("Window At", timeNowUs, timeAtNextWindowStartUs);
         LogNL();
 
         // prepare
-        ScheduleWindow(timeNowUs, timeAtWindowStartUs, haveGpsLock);
+        ScheduleWindow(timeNowUs, timeAtNextWindowStartUs, haveGpsLock);
     }
 
     void ScheduleWindow(uint64_t timeNowUs, uint64_t timeAtWindowStartUs, bool haveGpsLock)
@@ -1294,24 +1299,23 @@ public: // for test running
         Log(StrUtl::PadRight(title, ' ', startPadLen), ": ", Time::GetNotionalTimeFromSystemUs(timeAtUs), " ", untilStr);
     }
 
-    void PrintCoastDetails(uint64_t timeAtTriggerCoastUs, uint64_t timeAtNextWindowStartUs, uint64_t timeNowUs)
-    {
-        int64_t durationRemainingUs = (int64_t)(timeAtTriggerCoastUs - timeNowUs);
-        if (durationRemainingUs < 0) { durationRemainingUs = 0; }   // possible very first time
-        Log("Coast Scheduled");
-        Log("Time now              : ", Time::GetNotionalDateTimeFromSystemUs(timeNowUs));
-        Log("Duration before coast : ", Time::MakeTimeFromUs(durationRemainingUs, true));
-        Log("Coast scheduled for   : ", Time::GetNotionalDateTimeFromSystemUs(timeAtTriggerCoastUs));
-        Log("Duration before window: ", Time::MakeTimeFromUs(timeAtNextWindowStartUs - timeAtTriggerCoastUs, true));
-        Log("Next window at        : ", Time::GetNotionalDateTimeFromSystemUs(timeAtNextWindowStartUs));
-    }
-
     void PrintStatus()
     {
         uint64_t timeNowUs;
         uint64_t timeAtNextWindowStartUs = GetTimeAtNextWindowStartUs(&timeNowUs);
 
+        // get the time of the upcoming or current window
+        uint64_t timeAtUpcomingOrCurrentWindowStartUs = timeAtNextWindowStartUs;
+        if (inLockout_)
+        {
+            const uint64_t TEN_MINUTES_US = 10 * 60 * 1'000 * 1'000;
+
+            timeAtUpcomingOrCurrentWindowStartUs -= TEN_MINUTES_US;
+        }
+
         LogNL();
+        Log("Scheduler Status");
+        Log("---------------------------------------------");
         Log("Time Now         : ", Time::GetNotionalDateTimeFromSystemUs(timeNowUs));
         Log("Start/Stop Status: ", running_ ? "Started" : "Stopped");
         if (running_)
@@ -1320,13 +1324,15 @@ public: // for test running
             Log("Coast            : ", coastScheduled ? "Scheduled" : "Not Scheduled");
             if (coastScheduled)
             {
-                PrintCoastDetails(tedCoast_.GetTimeoutTimeUs(), timeAtNextWindowStartUs, timeNowUs);
+                PrintTimeAtDetails("Coast At         ", timeNowUs, tedCoast_.GetTimeoutTimeUs());
             }
+            
+            PrintTimeAtDetails("Window At        ", timeNowUs, timeAtUpcomingOrCurrentWindowStartUs);
 
             bool windowScheduled = inLockout_ || tedScheduleLockOutStart_.IsRegistered();
+            Log("Window Scheduled : ", windowScheduled ? "Yes" : "No");
             if (windowScheduled)
             {
-                Log("Window Scheduled : ", windowScheduled ? "Yes" : "No");
                 Log("In Window        : ", inLockout_ ? "Yes" : "No");
                 PrintTimeAtDetails("  tedTxWarmup_            ", timeNowUs, tedTxWarmup_.GetTimeoutTimeUs()             );
                 PrintTimeAtDetails("  tedScheduleLockOutStart_", timeNowUs, tedScheduleLockOutStart_.GetTimeoutTimeUs() );
@@ -1338,10 +1344,6 @@ public: // for test running
                 PrintTimeAtDetails("  tedPeriod5_             ", timeNowUs, tedPeriod5_.GetTimeoutTimeUs()              );
                 PrintTimeAtDetails("  tedTxDisableGpsEnable_  ", timeNowUs, tedTxDisableGpsEnable_.GetTimeoutTimeUs()   );
                 PrintTimeAtDetails("  tedScheduleLockOutEnd_  ", timeNowUs, tedScheduleLockOutEnd_.GetTimeoutTimeUs()   );
-            }
-            else
-            {
-                Log("Window Scheduled : ", windowScheduled ? "Yes" : "No");
             }
         }
     }
@@ -1514,27 +1516,27 @@ public: // for test running
 
     void SetupShell()
     {
-        Shell::AddCommand("test.start", [this](vector<string> argList){
+        Shell::AddCommand("start", [this](vector<string> argList){
             Start();
         }, { .argCount = 0, .help = ""});
 
-        Shell::AddCommand("test.stop", [this](vector<string> argList){
+        Shell::AddCommand("stop", [this](vector<string> argList){
             Stop();
         }, { .argCount = 0, .help = ""});
 
-        Shell::AddCommand("test.show", [this](vector<string> argList){
+        Shell::AddCommand("show", [this](vector<string> argList){
             PrintStatus();
         }, { .argCount = 0, .help = ""});
 
-        Shell::AddCommand("test.sched", [this](vector<string> argList){
+        Shell::AddCommand("sched", [this](vector<string> argList){
             TestPrepareWindowSchedule();
         }, { .argCount = 0, .help = ""});
 
-        Shell::AddCommand("test.cfg", [this](vector<string> argList){
+        Shell::AddCommand("cfg", [this](vector<string> argList){
             TestConfigureWindowSlotBehavior();
         }, { .argCount = 0, .help = "run test suite for slot behavior"});
 
-        Shell::AddCommand("test.calc", [this](vector<string> argList){
+        Shell::AddCommand("calc", [this](vector<string> argList){
             bool fullSweep = false;
             if (argList.size() == 1)
             {
@@ -1543,26 +1545,56 @@ public: // for test running
             TestCalculateTimeAtWindowStartUs(fullSweep);
         }, { .argCount = -1, .help = "run test suite for window start time [fullSweep=0]"});
 
-        Shell::AddCommand("test.gps", [this](vector<string> argList){
-            // set a time which triggers fast action.
-            // we set start minute to 0, so craft a lock time
-            // which triggers desired logic.
-            string dateTime = "2025-01-01 12:09:50.000";
-            auto tp = Time::ParseDateTime(dateTime);
+        Shell::AddCommand("lock", [this](vector<string> argList){
+            string type = argList[0];
 
-            Fix3DPlus gpsFix3DPlus;
-            gpsFix3DPlus.year        = tp.year;
-            gpsFix3DPlus.hour        = tp.hour;
-            gpsFix3DPlus.minute      = tp.minute;
-            gpsFix3DPlus.second      = tp.second;
-            gpsFix3DPlus.millisecond = tp.us / 1'000;
-            gpsFix3DPlus.dateTime    = dateTime;
+            if (type == "gps")
+            {
+                // set a time which triggers fast action.
+                // we set start minute to 0, so craft a lock time
+                // which triggers desired logic.
+                string dateTime = "2025-01-01 12:09:50.000";
+                auto tp = Time::ParseDateTime(dateTime);
 
-            SetStartMinute(0);
-            Stop();
-            Start();
-            OnGps3DPlusLock(gpsFix3DPlus);
-        }, { .argCount = 0, .help = "test gps lock"});
+                Fix3DPlus gpsFix3DPlus;
+                gpsFix3DPlus.year        = tp.year;
+                gpsFix3DPlus.hour        = tp.hour;
+                gpsFix3DPlus.minute      = tp.minute;
+                gpsFix3DPlus.second      = tp.second;
+                gpsFix3DPlus.millisecond = tp.us / 1'000;
+                gpsFix3DPlus.dateTime    = dateTime;
+
+                SetStartMinute(0);
+                Stop();
+                Start();
+                OnGps3DPlusLock(gpsFix3DPlus);
+            }
+            else if (type == "time")
+            {
+                // set a time which triggers fast action.
+                // we set start minute to 0, so craft a lock time
+                // which triggers desired logic.
+                string dateTime = "2025-01-01 12:09:50.000";
+                auto tp = Time::ParseDateTime(dateTime);
+
+                FixTime gpsFixTime;
+                gpsFixTime.year        = tp.year;
+                gpsFixTime.hour        = tp.hour;
+                gpsFixTime.minute      = tp.minute;
+                gpsFixTime.second      = tp.second;
+                gpsFixTime.millisecond = tp.us / 1'000;
+                gpsFixTime.dateTime    = dateTime;
+
+                SetStartMinute(0);
+                Stop();
+                Start();
+                OnGpsTimeLock(gpsFixTime);
+            }
+            else
+            {
+                Log("Invalid type");
+            }
+        }, { .argCount = 1, .help = "test gps lock <type=gps|time>"});
     }
 
 

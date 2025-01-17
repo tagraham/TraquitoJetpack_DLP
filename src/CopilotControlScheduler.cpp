@@ -1286,7 +1286,7 @@ void CopilotControlScheduler::TestCalculateTimeAtWindowStartUs(bool fullSweep)
 
     // full sweep of all values takes 2 minutes at 125MHz (36,000,000 tests)
     // full sweep of real window values takes 1 minute at 125MHz (18,000,000 tests)
-    Timeline::Use([&](auto &t){
+    Timeline::Measure([&](auto &t){
         uint8_t windowStartMinLow  = 0;
         uint8_t windowStartMinHigh = 8;
         uint8_t windowStepSize     = 2;
