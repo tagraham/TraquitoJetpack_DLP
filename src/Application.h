@@ -16,9 +16,9 @@ using namespace std;
 
 struct TestConfiguration
 {
-    bool enabled = false;
+    bool enabled = true;
 
-    bool fastStartEvmOnly = false;
+    bool fastStartEvmOnly = true;
 
     bool watchdogOn = true;
     bool logAsync = true;
@@ -300,10 +300,26 @@ public:
             // upcoming status blinks
             Watchdog::Feed();
             PAL.Delay(1'500);
-        }
 
-        // Go to initial state
-        GetNextGPSLock();
+
+
+
+
+
+            // Set up scheduler
+            auto &scheduler = ssCc_.GetScheduler();
+            // ...
+
+
+
+
+
+
+
+
+            // Start
+            // scheduler.Start();
+        }
     }
 
     /////////////////////////////////////////////////////////////////
@@ -425,7 +441,7 @@ public:
             t_.Event("Transmitter Starting");
 
             Log("Radio warmup starting");
-            Log("RTC Now: ", Time::MakeTimeShortFromMs(PAL.Millis()));
+            Log("RTC Now: ", Time::MakeTimeMMSSmmmFromUs(PAL.Millis()));
 
             ssTx_.Enable();
             ssTx_.RadioOn();
@@ -449,13 +465,13 @@ public:
         uint32_t radioOnTimeAsMs = fixTimeAsMs + delayRadioOnMs;
         uint32_t txTimeAsMs      = fixTimeAsMs + delayTransmitMs;
 
-        string timeGpsNow                = Time::MakeTimeShortFromMs(fixTimeAsMs);
-        string timeRadioOn               = Time::MakeTimeShortFromMs(radioOnTimeAsMs);
-        string timeRadioOnDuration       = Time::MakeTimeShortFromMs(delayRadioOnMs);
-        string durationRadioOnEarly      = Time::MakeTimeShortFromMs(delayTransmitMs - delayRadioOnMs);
-        string durationRadioDelayWanted  = Time::MakeTimeShortFromMs(RADIO_ON_EARLY_TARGET_MS);
-        string timeTx                    = Time::MakeTimeShortFromMs(txTimeAsMs);
-        string timeTxDuration            = Time::MakeTimeShortFromMs(delayTransmitMs);
+        string timeGpsNow                = Time::MakeTimeMMSSmmmFromUs(fixTimeAsMs);
+        string timeRadioOn               = Time::MakeTimeMMSSmmmFromUs(radioOnTimeAsMs);
+        string timeRadioOnDuration       = Time::MakeTimeMMSSmmmFromUs(delayRadioOnMs);
+        string durationRadioOnEarly      = Time::MakeTimeMMSSmmmFromUs(delayTransmitMs - delayRadioOnMs);
+        string durationRadioDelayWanted  = Time::MakeTimeMMSSmmmFromUs(RADIO_ON_EARLY_TARGET_MS);
+        string timeTx                    = Time::MakeTimeMMSSmmmFromUs(txTimeAsMs);
+        string timeTxDuration            = Time::MakeTimeMMSSmmmFromUs(delayTransmitMs);
 
         LogNL();
         Log("Scheduling TX to GPS time");
@@ -465,9 +481,9 @@ public:
         Log("  TX     : ", timeTx,      " (", timeTxDuration,      " from now)");
         Log("  Target : _", cd.min, ":00.000");
         LogNL();
-        Log("RTC Now      : ", Time::MakeTimeShortFromMs(timeNow));
-        Log("  Radio on at: ", Time::MakeTimeShortFromMs(timeNow + delayRadioOnMs));
-        Log("  TX    on at: ", Time::MakeTimeShortFromMs(timeNow + delayTransmitMs));
+        Log("RTC Now      : ", Time::MakeTimeMMSSmmmFromUs(timeNow));
+        Log("  Radio on at: ", Time::MakeTimeMMSSmmmFromUs(timeNow + delayRadioOnMs));
+        Log("  TX    on at: ", Time::MakeTimeMMSSmmmFromUs(timeNow + delayTransmitMs));
         LogNL();
 
         t_.Event("Scheduled");
@@ -480,7 +496,7 @@ public:
         t_.Event("YES_TIME_YES_FIX__TIME_TO_SEND");
 
         Log("Regular message sending start");
-        Log("RTC Now: ", Time::MakeTimeShortFromMs(PAL.Millis()));
+        Log("RTC Now: ", Time::MakeTimeMMSSmmmFromUs(PAL.Millis()));
 
         // retrieve flight configuration
         const Configuration &txCfg = ssTx_.GetConfiguration();
@@ -541,7 +557,7 @@ public:
         t_.Event("Waited for U4B Send Time");
 
         Log("Encoded message sending start");
-        Log("RTC Now: ", Time::MakeTimeShortFromMs(PAL.Millis()));
+        Log("RTC Now: ", Time::MakeTimeMMSSmmmFromUs(PAL.Millis()));
 
         // get data needed to fill out encoded message
         WsprChannelMap::ChannelDetails cd = WsprChannelMap::GetChannelDetails(txCfg.band.c_str(), txCfg.channel);
@@ -591,7 +607,7 @@ public:
             LogModeSync();
 
             LogNL();
-            Log("No GPS Lock within ", Time::MakeTimeShortFromMs(TWENTY_MINUTES));
+            Log("No GPS Lock within ", Time::MakeTimeMMSSmmmFromUs(TWENTY_MINUTES));
 
             // hard reset GPS
             Log("Hard Resetting GPS");
@@ -663,6 +679,34 @@ private:
         // longer. ~70ms to accomplish.
         Log("Prepare 48MHz clock speed");
         Clock::PrepareClockMHz(48);
+
+
+
+
+
+
+
+
+
+
+
+        // Clock::PrepareClockMHz(48, true);   // do this?
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
         // 5mA baseline
         // takes ~10ms to accomplish
