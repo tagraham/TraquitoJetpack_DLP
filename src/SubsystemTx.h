@@ -2,7 +2,7 @@
 
 #include "App.h"
 #include "JSONMsgRouter.h"
-#include "WsprEncoded.h"
+#include "WsprEncodedDynamic.h"
 #include "WSPRMessageTransmitter.h"
 
 #include "Configuration.h"

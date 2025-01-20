@@ -6,7 +6,7 @@ using namespace std;
 
 #include "Flashable.h"
 #include "JSONMsgRouter.h"
-#include "WsprEncoded.h"
+#include "WsprEncodedDynamic.h"
 
 
 class Configuration

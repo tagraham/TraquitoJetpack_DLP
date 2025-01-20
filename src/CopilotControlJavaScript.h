@@ -27,8 +27,7 @@ using namespace std;
 
 class CopilotControlJavaScript
 {
-    using MsgUD  = WsprMessageTelemetryExtendedUserDefined<29>;
-    using MsgUDD = WsprMessageTelemetryExtendedUserDefinedDynamic<29>;
+    using MsgUD = WsprMessageTelemetryExtendedUserDefined<29>;
 
 
 public:
@@ -55,7 +54,7 @@ private:
     /////////////////////////////////////////////////////////////////
 
     // assumes the VM is running
-    static void LoadJavaScriptBindings(MsgUDD &msg, Fix3DPlus *gpsFix = nullptr)
+    static void LoadJavaScriptBindings(MsgUD &msg, Fix3DPlus *gpsFix = nullptr)
     {
         // UserDefined Message API
         JerryScript::UseThenFreeNewObj([&](auto obj){
@@ -146,7 +145,7 @@ private:
     JavaScriptRunResult RunSlotJavaScriptCustomScript(const string &slotName, const string &script)
     {
         // look up slot context
-        MsgUDD &msg = CopilotControlMessageDefinition::GetMsgBySlotName(slotName);
+        MsgUD &msg = CopilotControlMessageDefinition::GetMsgBySlotName(slotName);
 
         return RunJavaScript(script, msg);
     }
@@ -154,14 +153,14 @@ private:
 public:
     JavaScriptRunResult RunSlotJavaScript(const string &slotName, Fix3DPlus *gpsFix = nullptr)
     {
-        MsgUDD &msg    = CopilotControlMessageDefinition::GetMsgBySlotName(slotName);
+        MsgUD &msg    = CopilotControlMessageDefinition::GetMsgBySlotName(slotName);
         string  script = CopilotControlConfiguration::GetJavaScript(slotName);
 
         return RunJavaScript(script, msg, gpsFix);
     }
 private:
 
-    JavaScriptRunResult RunJavaScript(const string &script, MsgUDD &msg, Fix3DPlus *gpsFix = nullptr)
+    JavaScriptRunResult RunJavaScript(const string &script, MsgUD &msg, Fix3DPlus *gpsFix = nullptr)
     {
         JavaScriptRunResult retVal;
 

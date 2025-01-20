@@ -13,20 +13,20 @@ using namespace std;
 
 class CopilotControlMessageDefinition
 {
-    using MsgUDD = WsprMessageTelemetryExtendedUserDefinedDynamic<29>;
+    using MsgUD = WsprMessageTelemetryExtendedUserDefined<29>;
 
 public:
 
     static bool SlotHasMsgDef(string slotName)
     {
-        MsgUDD &msg = GetMsgBySlotName(slotName);
+        MsgUD &msg = GetMsgBySlotName(slotName);
 
         return msg.GetFieldList().size();
     }
 
-    static MsgUDD &GetMsgBySlotName(string slotName)
+    static MsgUD &GetMsgBySlotName(string slotName)
     {
-        MsgUDD &msg = msg_;
+        MsgUD &msg = msg_;
 
         // pull stored field def and configure
         string msgDef = CopilotControlConfiguration::GetMsgDef(slotName);
@@ -36,7 +36,7 @@ public:
         return msg;
     }
 
-    static string GetMsgStateAsString(MsgUDD &msg)
+    static string GetMsgStateAsString(MsgUD &msg)
     {
         string retVal;
 
@@ -87,7 +87,7 @@ public:
 private:
 
     // 20ms at 48MHz with 29 fields (ie don't worry about it)
-    static bool ConfigureMsgFromMsgDef(MsgUDD &msg, const string &msgDef, const string &title)
+    static bool ConfigureMsgFromMsgDef(MsgUD &msg, const string &msgDef, const string &title)
     {
         bool retVal = false;
 
@@ -187,5 +187,5 @@ private:
 
 private:
 
-    inline static MsgUDD msg_;
+    inline static MsgUD msg_;
 };
