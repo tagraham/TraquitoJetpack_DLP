@@ -184,8 +184,6 @@ void MakeTestEventStart(TimerSequence &ts, const char *fnName)
         Log("==============================================");
         Log("Test ", fnName, "() pre-start: ", Time::MakeTimeFromUs(PAL.Micros()));
         LogNL();
-
-        ts.TimeoutInMs(0);
     });
 }
 
@@ -207,8 +205,6 @@ void MakeTestEventEnd(TimerSequence &ts, const char *fnName, vector<string> expe
         Log(result);
         Log("==============================================");
         LogNL();
-
-        ts.TimeoutInMs(0);
     });
 }
 
@@ -221,10 +217,8 @@ void TestEventsStart(TimerSequence &ts)
     };
 
     MakeTestEventStart(ts, __func__);
-    ts.Add([&]{
+    ts.Add([]{
         scheduler->Start();
-
-        ts.TimeoutInMs(0);
     });
     MakeTestEventEnd(ts, __func__, expectedList);
 }
@@ -244,15 +238,11 @@ void TestEventsStartTime(TimerSequence &ts)
     };
 
     MakeTestEventStart(ts, __func__);
-    ts.Add([&]{
+    ts.Add([]{
         scheduler->Start();
-
-        ts.TimeoutInMs(0);
-    }).Add([&]{
+    }).Add([]{
         scheduler->OnGpsTimeLock(MakeFixTime("2025-01-01 12:10:00.500"));
-
-        ts.TimeoutInMs(1'000);
-    });
+    }).StepFromInMs(1'000);
     MakeTestEventEnd(ts, __func__, expectedList);
 }
 
@@ -271,19 +261,13 @@ void TestEventsStartTimeTime(TimerSequence &ts)
     };
 
     MakeTestEventStart(ts, __func__);
-    ts.Add([&]{
+    ts.Add([]{
         scheduler->Start();
-
-        ts.TimeoutInMs(0);
-    }).Add([&]{
+    }).Add([]{
         scheduler->OnGpsTimeLock(MakeFixTime("2025-01-01 12:10:00.500"));
-
-        ts.TimeoutInMs(0);
-    }).Add([&]{
+    }).Add([]{
         scheduler->OnGpsTimeLock(MakeFixTime("2025-01-01 12:10:00.600"));
-
-        ts.TimeoutInMs(1'000);
-    });
+    }).StepFromInMs(1'000);
     MakeTestEventEnd(ts, __func__, expectedList);
 }
 
@@ -301,15 +285,11 @@ void TestEventsStart3d(TimerSequence &ts)
     };
 
     MakeTestEventStart(ts, __func__);
-    ts.Add([&]{
+    ts.Add([]{
         scheduler->Start();
-
-        ts.TimeoutInMs(0);
-    }).Add([&]{
+    }).Add([]{
         scheduler->OnGps3DPlusLock(MakeFix3DPlus("2025-01-01 12:10:00.500"));
-
-        ts.TimeoutInMs(1'000);
-    });
+    }).StepFromInMs(1'000);
     MakeTestEventEnd(ts, __func__, expectedList);
 }
 
@@ -377,7 +357,7 @@ void CopilotControlScheduler::TestEventInterface()
     });
 
     // kick off sequence
-    ts.TimeoutInMs(0);
+    ts.Start();
     Evm::MainLoop();
 
     Log("TestEventInterface Done");
