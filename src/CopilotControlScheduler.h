@@ -64,6 +64,10 @@ private:
         {
             fnCbRequestNewGpsLock_();
         }
+
+
+        // set some flag that is used to reject GPS until this is reached
+
     }
 
     void CancelRequestNewGpsLock()
@@ -423,6 +427,7 @@ public:
 
         if (!inLockout_)
         {
+            LogNL();
             Mark("ON_GPS_3D_PLUS_LOCK");
             LogNL();
 
@@ -437,6 +442,7 @@ public:
         }
         else
         {
+            LogNL();
             Mark("ON_GPS_LOCK_3D_PLUS_DURING_LOCKOUT");
             LogNL();
 
@@ -454,6 +460,7 @@ public:
 
         if (!inLockout_)
         {
+            LogNL();
             Mark("ON_GPS_TIME_LOCK");
             LogNL();
 
@@ -476,6 +483,7 @@ public:
         }
         else
         {
+            LogNL();
             Mark("ON_GPS_LOCK_TIME_DURING_LOCKOUT");
             LogNL();
 
@@ -595,6 +603,9 @@ private:
         // schedule
         if (haveGpsLock)
         {
+            LogNL();
+            Mark("COAST_CANCELED");
+
             // cancel coast timer
             tCoast_.Cancel();
 
@@ -610,6 +621,7 @@ private:
             // wait to trigger coast for as long as possible to give max time
             // for 3d fix to be acquired before giving up.
             tCoast_.SetCallback([this]{
+                LogNL();
                 Mark("COAST_TRIGGERED");
 
                 // cancel gps request
@@ -619,25 +631,33 @@ private:
                 ScheduleUpdateSchedule(false);
             }, "TIMER_COAST_TRIGGERED");
 
-            uint64_t DURATION_SEVEN_SECS_US = 7 * 1'000 * 1'000;
+            const uint64_t DURATION_SEVEN_SECS_US = 7 * 1'000 * 1'000;
+            uint64_t COAST_LEAD_DURATION_US = DURATION_SEVEN_SECS_US;
+            if (IsTesting())
+            {
+                COAST_LEAD_DURATION_US = 250'000;
+            }
             uint64_t timeNowUs;
             uint64_t timeAtNextWindowStartUs = GetTimeAtNextWindowStartUs(&timeNowUs);
 
             // try to be a given duration earlier than the window, but don't go before timeNowUs
             uint64_t timeAtTriggerCoastUs = timeAtNextWindowStartUs -
-                                            min(DURATION_SEVEN_SECS_US, timeAtNextWindowStartUs - timeNowUs);
+                                            min(COAST_LEAD_DURATION_US, timeAtNextWindowStartUs - timeNowUs);
             tCoast_.TimeoutAtUs(timeAtTriggerCoastUs);
 
             Mark("COAST_SCHEDULED");
             Log("Time now : ", Time::GetNotionalTimeAtSystemUs(timeNowUs));
             PrintTimeAtDetails("Coast At ", timeNowUs, timeAtTriggerCoastUs);
-            Log("  Wanted             ", Time::MakeTimeFromUs(DURATION_SEVEN_SECS_US, true));
+            Log("  Wanted             ", Time::MakeTimeFromUs(COAST_LEAD_DURATION_US, true));
+            Log("  Got                ", Time::MakeTimeFromUs(timeAtNextWindowStartUs - timeAtTriggerCoastUs, true));
             PrintTimeAtDetails("Window At", timeNowUs, timeAtNextWindowStartUs);
+            LogNL();
         }
     }
 
     void ScheduleUpdateSchedule(bool haveGpsLock)
     {
+        LogNL();
         Mark("UPDATE_SCHEDULE");
 
         // get current time and time of next window
@@ -1042,9 +1062,12 @@ public: // for test running
         const uint64_t DURATION_THIRTY_SECONDS_US =     30 * 1'000 * 1'000;
         const uint64_t DURATION_TWO_MINUTES_US    = 2 * 60 * 1'000 * 1'000;
 
-        const uint64_t DURATION_AVAIL_PRE_WINDOW_US = timeAtWindowStartUs - timeNowUs;
+        uint64_t DURATION_AVAIL_PRE_WINDOW_US = timeAtWindowStartUs - timeNowUs;
 
-
+        if (IsTesting())
+        {
+            DURATION_AVAIL_PRE_WINDOW_US = 0;
+        }
 
 
         // warmup start time
@@ -1066,11 +1089,11 @@ public: // for test running
         if (PeriodWillTransmit(4)) { DO_WARMUP = true; }
         if (PeriodWillTransmit(5)) { DO_WARMUP = true; }
 
+
         // duration required for initial JS
         const uint64_t DURATION_JS_NOMINAL_US       = js_.GetScriptTimeLimitMs() * 1'000;
         const uint64_t DURATION_JS_NOMINAL_FUDGE_US = DURATION_ONE_SECOND_US;
-        const uint64_t DURATION_JS_US               = DURATION_JS_NOMINAL_US +
-                                                      DURATION_JS_NOMINAL_FUDGE_US;
+        const uint64_t DURATION_JS_US               = DURATION_JS_NOMINAL_US + DURATION_JS_NOMINAL_FUDGE_US;
 
         // duration lockout start
         //
@@ -1342,7 +1365,7 @@ public: // for test running
     // Testing
     /////////////////////////////////////////////////////////////////
 
-    void TestEventInterface();
+    void TestGpsEventInterface();
     void TestPrepareWindowSchedule();
     void TestConfigureWindowSlotBehavior();
     void TestCalculateTimeAtWindowStartUs(bool fullSweep = false);
@@ -1624,8 +1647,8 @@ public: // for test running
             PrintStatus();
         }, { .argCount = 0, .help = ""});
 
-        Shell::AddCommand("event", [this](vector<string> argList){
-            TestEventInterface();
+        Shell::AddCommand("gps", [this](vector<string> argList){
+            TestGpsEventInterface();
         }, { .argCount = 0, .help = ""});
 
         Shell::AddCommand("sched", [this](vector<string> argList){

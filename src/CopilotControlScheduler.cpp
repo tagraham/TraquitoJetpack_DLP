@@ -111,13 +111,13 @@ string JustFunctionName(string fnScoped)
 
 
 ///////////////////////////////////////////////////////////////////////////////
-// TestEventInterface
+// TestGpsEventInterface
 ///////////////////////////////////////////////////////////////////////////////
 
 
 // expected is a subset of actual, but all elements need to be found
 // in the order expressed for it to be a match
-static auto AssertEvent = [](string title, vector<string> actualList, vector<string> expectedList){
+static auto AssertGpsEvents = [](string title, vector<string> actualList, vector<string> expectedList){
     bool retVal = true;
 
     vector<string> actualListCpy = actualList;
@@ -195,7 +195,7 @@ void MakeTestEventEnd(TimerSequence &ts, const char *fnName, vector<string> expe
 
         Log("Test post-stop: ", Time::MakeTimeFromUs(PAL.Micros()));
 
-        bool testOk = AssertEvent(fnName, scheduler->GetMarkList(), expectedList);
+        bool testOk = AssertGpsEvents(fnName, scheduler->GetMarkList(), expectedList);
         scheduler->DestroyMarkList(id);
 
         LogNL();
@@ -210,7 +210,38 @@ void MakeTestEventEnd(TimerSequence &ts, const char *fnName, vector<string> expe
 
 
 
-void TestEventsStart(TimerSequence &ts)
+class GpsEventsTestBuilder
+{
+public:
+    GpsEventsTestBuilder(TimerSequence &ts, const char *fnName)
+    : ts_(ts)
+    , fnName_(fnName)
+    {
+        MakeTestEventStart(ts_, fnName_);
+    }
+
+    void AddLockTime(string dateTime)
+    {
+        
+    }
+
+
+    void Finish()
+    {
+        MakeTestEventEnd(ts_, fnName_, expectedList_);
+    }
+
+private:
+
+    vector<string> expectedList_;
+
+    TimerSequence &ts_;
+    const char *fnName_;
+};
+
+
+
+void TestGpsEventsStart(TimerSequence &ts)
 {
     vector<string> expectedList = {
         "REQ_NEW_GPS_LOCK"
@@ -223,10 +254,11 @@ void TestEventsStart(TimerSequence &ts)
     MakeTestEventEnd(ts, __func__, expectedList);
 }
 
-void TestEventsStartTime(TimerSequence &ts)
+void TestGpsEventsStartTime(TimerSequence &ts)
 {
     vector<string> expectedList = {
         "REQ_NEW_GPS_LOCK",
+        "ON_GPS_TIME_LOCK",
         "APPLY_TIME_AND_UPDATE_SCHEDULE",
         "COAST_SCHEDULED",
         "COAST_TRIGGERED",
@@ -246,13 +278,25 @@ void TestEventsStartTime(TimerSequence &ts)
     MakeTestEventEnd(ts, __func__, expectedList);
 }
 
-void TestEventsStartTimeTime(TimerSequence &ts)
+void TestGpsEventsStartTimeTime(TimerSequence &ts)
 {
     vector<string> expectedList = {
         "REQ_NEW_GPS_LOCK",
+
+        // time lock
+        "ON_GPS_TIME_LOCK",
         "APPLY_TIME_AND_UPDATE_SCHEDULE",
         "COAST_SCHEDULED",
+
+        // time lock
+        "ON_GPS_TIME_LOCK",
+        "APPLY_TIME_AND_UPDATE_SCHEDULE",
+        "COAST_SCHEDULED",
+
+        // coast trigger
         "COAST_TRIGGERED",
+
+        // window
         "SCHEDULE_LOCK_OUT_START",
         "SCHEDULE_LOCK_OUT_END",
 
@@ -271,13 +315,18 @@ void TestEventsStartTimeTime(TimerSequence &ts)
     MakeTestEventEnd(ts, __func__, expectedList);
 }
 
-void TestEventsStart3d(TimerSequence &ts)
+void TestGpsEventsStart3d(TimerSequence &ts)
 {
     vector<string> expectedList = {
         "REQ_NEW_GPS_LOCK",
+
+        // 3d lock
+        "ON_GPS_3D_PLUS_LOCK",
         "APPLY_TIME_AND_UPDATE_SCHEDULE",
+        "COAST_CANCELED",
+
+        // window
         "SCHEDULE_LOCK_OUT_START",
-        "HI",
         "SCHEDULE_LOCK_OUT_END",
 
         // next window
@@ -293,15 +342,49 @@ void TestEventsStart3d(TimerSequence &ts)
     MakeTestEventEnd(ts, __func__, expectedList);
 }
 
+void TestGpsEventsStartTime3d(TimerSequence &ts)
+{
+    vector<string> expectedList = {
+        "REQ_NEW_GPS_LOCK",
+
+        // time lock
+        "ON_GPS_TIME_LOCK",
+        "APPLY_TIME_AND_UPDATE_SCHEDULE",
+        "COAST_SCHEDULED",
+
+        // 3d lock
+        "ON_GPS_3D_PLUS_LOCK",
+        "APPLY_TIME_AND_UPDATE_SCHEDULE",
+        "COAST_CANCELED",
+
+        // window
+        "SCHEDULE_LOCK_OUT_START",
+        "SCHEDULE_LOCK_OUT_END",
+
+        // next window
+        "APPLY_CACHE_OLD_3D_PLUS",
+    };
+
+    MakeTestEventStart(ts, __func__);
+    ts.Add([]{
+        scheduler->Start();
+    }).Add([]{
+        scheduler->OnGpsTimeLock(MakeFixTime("2025-01-01 12:10:00.500"));
+    }).Add([]{
+        scheduler->OnGps3DPlusLock(MakeFix3DPlus("2025-01-01 12:10:00.600"));
+    }).StepFromInMs(1'000);
+    MakeTestEventEnd(ts, __func__, expectedList);
+}
 
 
 
-void CopilotControlScheduler::TestEventInterface()
+
+void CopilotControlScheduler::TestGpsEventInterface()
 {
     scheduler = this;
     scheduler->Stop();
 
-    Log("TestEventInterface Start");
+    Log("TestGpsEventInterface Start");
     LogNL();
 
     BackupFiles();
@@ -330,10 +413,11 @@ void CopilotControlScheduler::TestEventInterface()
     TimerSequence ts;
 
     // tests
-    TestEventsStart(ts);
-    TestEventsStartTime(ts);
-    TestEventsStartTimeTime(ts);
-    TestEventsStart3d(ts);
+    TestGpsEventsStart(ts);
+    TestGpsEventsStartTime(ts);
+    TestGpsEventsStartTimeTime(ts);
+    TestGpsEventsStart3d(ts);
+    TestGpsEventsStartTime3d(ts);
 
 
     // Complete
@@ -360,7 +444,7 @@ void CopilotControlScheduler::TestEventInterface()
     ts.Start();
     Evm::MainLoop();
 
-    Log("TestEventInterface Done");
+    Log("TestGpsEventInterface Done");
 }
 
 
