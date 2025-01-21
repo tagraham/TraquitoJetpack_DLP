@@ -172,53 +172,79 @@ static FixTime MakeFixTime(const char *dateTime)
 
 static int id = IncrAndGetTestId();
 
-void TestEventsStart(TimerSequence &ts)
+
+void MakeTestEventStart(TimerSequence &ts, const char *fnName)
 {
-    ts.Add([&]{
+    ts.Add([=, &ts]{
         scheduler->SetTesting(true);
         scheduler->CreateMarkList(id);
-        Log("Test pre-start: ", Time::MakeTimeFromUs(PAL.Micros()));
-
-        ts.TimeoutInMs(0);
-    }).Add([&]{
-        scheduler->Start();
-
-        ts.TimeoutInMs(0);
-    }).Add([&]{
-        scheduler->Stop();
-        Log("Test post-stop: ", Time::MakeTimeFromUs(PAL.Micros()));
-
-        string title = JustFunctionName(source_location::current().function_name());
-
-        scheduler->SetTesting(false);
-
-        vector<string> expectedList = {
-            "REQ_NEW_GPS_LOCK"
-        };
-
-        bool testOk = AssertEvent(title, scheduler->GetMarkList(), expectedList);
-        scheduler->DestroyMarkList(id);
 
         LogNL();
-        uint64_t timeNowUs = PAL.Micros();
-        string result = string{"["} + Time::GetNotionalTimeAtSystemUs(timeNowUs) + ", " + Time::MakeTimeFromUs(timeNowUs) + "] === Test " + (testOk ? "" : "NOT ") + "ok " + title + " ===";
-        testResultList.push_back(result);
-        Log(result);
+        LogNL();
+        Log("==============================================");
+        Log("Test ", fnName, "() pre-start: ", Time::MakeTimeFromUs(PAL.Micros()));
         LogNL();
 
         ts.TimeoutInMs(0);
     });
 }
 
-void TestEventsStartTime(TimerSequence &ts)
+void MakeTestEventEnd(TimerSequence &ts, const char *fnName, vector<string> expectedList)
 {
-    ts.Add([&]{
-        scheduler->SetTesting(true);
-        scheduler->CreateMarkList(id);
-        Log("Test pre-start: ", Time::MakeTimeFromUs(PAL.Micros()));
+    ts.Add([=, &ts]{
+        scheduler->Stop();
+        scheduler->SetTesting(false);
+
+        Log("Test post-stop: ", Time::MakeTimeFromUs(PAL.Micros()));
+
+        bool testOk = AssertEvent(fnName, scheduler->GetMarkList(), expectedList);
+        scheduler->DestroyMarkList(id);
+
+        LogNL();
+        uint64_t timeNowUs = PAL.Micros();
+        string result = string{"["} + Time::GetNotionalTimeAtSystemUs(timeNowUs) + ", " + Time::MakeTimeFromUs(timeNowUs) + "] === Test " + (testOk ? "" : "NOT ") + "ok " + fnName + "() ===";
+        testResultList.push_back(result);
+        Log(result);
+        Log("==============================================");
+        LogNL();
 
         ts.TimeoutInMs(0);
-    }).Add([&]{
+    });
+}
+
+
+
+void TestEventsStart(TimerSequence &ts)
+{
+    vector<string> expectedList = {
+        "REQ_NEW_GPS_LOCK"
+    };
+
+    MakeTestEventStart(ts, __func__);
+    ts.Add([&]{
+        scheduler->Start();
+
+        ts.TimeoutInMs(0);
+    });
+    MakeTestEventEnd(ts, __func__, expectedList);
+}
+
+void TestEventsStartTime(TimerSequence &ts)
+{
+    vector<string> expectedList = {
+        "REQ_NEW_GPS_LOCK",
+        "APPLY_TIME_AND_UPDATE_SCHEDULE",
+        "COAST_SCHEDULED",
+        "COAST_TRIGGERED",
+        "SCHEDULE_LOCK_OUT_START",
+        "SCHEDULE_LOCK_OUT_END",
+
+        // next window
+        "APPLY_CACHE_OLD_TIME",
+    };
+
+    MakeTestEventStart(ts, __func__);
+    ts.Add([&]{
         scheduler->Start();
 
         ts.TimeoutInMs(0);
@@ -226,49 +252,26 @@ void TestEventsStartTime(TimerSequence &ts)
         scheduler->OnGpsTimeLock(MakeFixTime("2025-01-01 12:10:00.500"));
 
         ts.TimeoutInMs(1'000);
-    }).Add([&]{
-        scheduler->Stop();
-        Log("Test post-stop: ", Time::MakeTimeFromUs(PAL.Micros()));
-
-        string title = JustFunctionName(source_location::current().function_name());
-
-        scheduler->SetTesting(false);
-
-        vector<string> expectedList = {
-            "REQ_NEW_GPS_LOCK",
-            "APPLY_TIME_AND_UPDATE_SCHEDULE",
-            "COAST_SCHEDULED",
-            "COAST_TRIGGERED",
-            "SCHEDULE_LOCK_OUT_START",
-            "SCHEDULE_LOCK_OUT_END",
-
-            // next window
-            "APPLY_CACHE_OLD_TIME",
-        };
-
-        bool testOk = AssertEvent(title, scheduler->GetMarkList(), expectedList);
-        scheduler->DestroyMarkList(id);
-
-        LogNL();
-        uint64_t timeNowUs = PAL.Micros();
-        string result = string{"["} + Time::GetNotionalTimeAtSystemUs(timeNowUs) + ", " + Time::MakeTimeFromUs(timeNowUs) + "] === Test " + (testOk ? "" : "NOT ") + "ok " + title + " ===";
-        testResultList.push_back(result);
-        Log(result);
-        LogNL();
-
-        ts.TimeoutInMs(0);
     });
+    MakeTestEventEnd(ts, __func__, expectedList);
 }
 
 void TestEventsStartTimeTime(TimerSequence &ts)
 {
-    ts.Add([&]{
-        scheduler->SetTesting(true);
-        scheduler->CreateMarkList(id);
-        Log("Test pre-start: ", Time::MakeTimeFromUs(PAL.Micros()));
+    vector<string> expectedList = {
+        "REQ_NEW_GPS_LOCK",
+        "APPLY_TIME_AND_UPDATE_SCHEDULE",
+        "COAST_SCHEDULED",
+        "COAST_TRIGGERED",
+        "SCHEDULE_LOCK_OUT_START",
+        "SCHEDULE_LOCK_OUT_END",
 
-        ts.TimeoutInMs(0);
-    }).Add([&]{
+        // next window
+        "APPLY_CACHE_OLD_TIME",
+    };
+
+    MakeTestEventStart(ts, __func__);
+    ts.Add([&]{
         scheduler->Start();
 
         ts.TimeoutInMs(0);
@@ -280,49 +283,25 @@ void TestEventsStartTimeTime(TimerSequence &ts)
         scheduler->OnGpsTimeLock(MakeFixTime("2025-01-01 12:10:00.600"));
 
         ts.TimeoutInMs(1'000);
-    }).Add([&]{
-        scheduler->Stop();
-        Log("Test post-stop: ", Time::MakeTimeFromUs(PAL.Micros()));
-
-        string title = JustFunctionName(source_location::current().function_name());
-
-        scheduler->SetTesting(false);
-
-        vector<string> expectedList = {
-            "REQ_NEW_GPS_LOCK",
-            "APPLY_TIME_AND_UPDATE_SCHEDULE",
-            "COAST_SCHEDULED",
-            "COAST_TRIGGERED",
-            "SCHEDULE_LOCK_OUT_START",
-            "SCHEDULE_LOCK_OUT_END",
-
-            // next window
-            "APPLY_CACHE_OLD_TIME",
-        };
-
-        bool testOk = AssertEvent(title, scheduler->GetMarkList(), expectedList);
-        scheduler->DestroyMarkList(id);
-
-        LogNL();
-        uint64_t timeNowUs = PAL.Micros();
-        string result = string{"["} + Time::GetNotionalTimeAtSystemUs(timeNowUs) + ", " + Time::MakeTimeFromUs(timeNowUs) + "] === Test " + (testOk ? "" : "NOT ") + "ok " + title + " ===";
-        testResultList.push_back(result);
-        Log(result);
-        LogNL();
-
-        ts.TimeoutInMs(0);
     });
+    MakeTestEventEnd(ts, __func__, expectedList);
 }
 
 void TestEventsStart3d(TimerSequence &ts)
 {
-    ts.Add([&]{
-        scheduler->SetTesting(true);
-        scheduler->CreateMarkList(id);
-        Log("Test pre-start: ", Time::MakeTimeFromUs(PAL.Micros()));
+    vector<string> expectedList = {
+        "REQ_NEW_GPS_LOCK",
+        "APPLY_TIME_AND_UPDATE_SCHEDULE",
+        "SCHEDULE_LOCK_OUT_START",
+        "HI",
+        "SCHEDULE_LOCK_OUT_END",
 
-        ts.TimeoutInMs(0);
-    }).Add([&]{
+        // next window
+        "APPLY_CACHE_OLD_3D_PLUS",
+    };
+
+    MakeTestEventStart(ts, __func__);
+    ts.Add([&]{
         scheduler->Start();
 
         ts.TimeoutInMs(0);
@@ -330,39 +309,8 @@ void TestEventsStart3d(TimerSequence &ts)
         scheduler->OnGps3DPlusLock(MakeFix3DPlus("2025-01-01 12:10:00.500"));
 
         ts.TimeoutInMs(1'000);
-    }).Add([&]{
-        scheduler->Stop();
-        Log("Test post-stop: ", Time::MakeTimeFromUs(PAL.Micros()));
-
-        string title = JustFunctionName(source_location::current().function_name());
-
-        scheduler->SetTesting(false);
-
-        vector<string> expectedList = {
-            "REQ_NEW_GPS_LOCK",
-            "APPLY_TIME_AND_UPDATE_SCHEDULE",
-            "COAST_SCHEDULED",
-            "COAST_TRIGGERED",
-            "SCHEDULE_LOCK_OUT_START",
-            "HI",
-            "SCHEDULE_LOCK_OUT_END",
-
-            // next window
-            "APPLY_CACHE_OLD_3D_PLUS",
-        };
-
-        bool testOk = AssertEvent(title, scheduler->GetMarkList(), expectedList);
-        scheduler->DestroyMarkList(id);
-
-        LogNL();
-        uint64_t timeNowUs = PAL.Micros();
-        string result = string{"["} + Time::GetNotionalTimeAtSystemUs(timeNowUs) + ", " + Time::MakeTimeFromUs(timeNowUs) + "] === Test " + (testOk ? "" : "NOT ") + "ok " + title + " ===";
-        testResultList.push_back(result);
-        Log(result);
-        LogNL();
-
-        ts.TimeoutInMs(0);
     });
+    MakeTestEventEnd(ts, __func__, expectedList);
 }
 
 
@@ -371,38 +319,47 @@ void TestEventsStart3d(TimerSequence &ts)
 void CopilotControlScheduler::TestEventInterface()
 {
     scheduler = this;
-
-    BackupFiles();
+    scheduler->Stop();
 
     Log("TestEventInterface Start");
-    ResetTestDuration();
+    LogNL();
+
+    BackupFiles();
 
     SetUseMarkList(true);
     ClearTestResultList();
 
 
-    // setup a definite testing environment
+    // setup a definite testing environment.
+    // it's not important, specifically, though, since we're only interested in
+    // events which occur regarding gps relating to the window and next window
+    // scheduling.
+    // better to have determinism, though.
     SetStartMinute(0);
-    scheduler->Stop();
     SetSlot("slot1", msgDefBlank, jsUsesNeither);
     SetSlot("slot2", msgDefBlank, jsUsesNeither);
     SetSlot("slot3", msgDefBlank, jsUsesNeither);
     SetSlot("slot4", msgDefBlank, jsUsesNeither);
     SetSlot("slot5", msgDefBlank, jsUsesNeither);
+    bool hasGpsLock = true;
+    PrepareWindowSlotBehavior(hasGpsLock);
+    SetTestingCalculateSlotBehaviorDisabled(true);
+    SetTestingJsDisabled(true);
 
-    // Reset the async test sequence
+    // Set up timer sequence
     TimerSequence ts;
 
     // tests
-    // TestEventsStart(ts);
-    // TestEventsStartTime(ts);
-    // TestEventsStartTimeTime(ts);
+    TestEventsStart(ts);
+    TestEventsStartTime(ts);
+    TestEventsStartTimeTime(ts);
     TestEventsStart3d(ts);
 
 
     // Complete
     ts.Add([this]{
-        scheduler->Stop();
+        SetTestingCalculateSlotBehaviorDisabled(false);
+        SetTestingJsDisabled(false);
 
         Log(testResultList.size(), " tests run");
         for (const auto &result : testResultList)

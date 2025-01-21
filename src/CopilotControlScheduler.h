@@ -870,6 +870,8 @@ public: // for test running
 
     void PrepareWindowSlotBehavior(bool haveGpsLock)
     {
+        if (IsTestingCalculateSlotBehaviorDisabled()) { return; }
+
         Mark("PREPARE_WINDOW_SLOT_BEHAVIOR_START");
 
         // slot 1
@@ -1314,8 +1316,15 @@ public: // for test running
         GoHighSpeed();
 
         // invoke js
-        auto jsResult = js_.RunSlotJavaScript(slotName, &scheduleDataActive_.gpsFix3DPlus);
-        retVal = jsResult.runOk;
+        if (IsTestingJsDisabled() == false)
+        {
+            auto jsResult = js_.RunSlotJavaScript(slotName, &scheduleDataActive_.gpsFix3DPlus);
+            retVal = jsResult.runOk;
+        }
+        else
+        {
+            retVal = true;
+        }
 
         // change to 6MHz
         GoLowSpeed();
@@ -1423,6 +1432,28 @@ public: // for test running
     bool IsTesting()
     {
         return testing_;
+    }
+
+    bool calculateSlotBehaviorDisabled_ = false;
+    void SetTestingCalculateSlotBehaviorDisabled(bool tf)
+    {
+        calculateSlotBehaviorDisabled_ = tf;
+    }
+
+    bool IsTestingCalculateSlotBehaviorDisabled()
+    {
+        return calculateSlotBehaviorDisabled_;
+    }
+
+    bool jsDisabled_ = false;
+    void SetTestingJsDisabled(bool tf)
+    {
+        jsDisabled_ = tf;
+    }
+
+    bool IsTestingJsDisabled()
+    {
+        return jsDisabled_;
     }
 
     void BackupFiles()
