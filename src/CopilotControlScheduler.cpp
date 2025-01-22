@@ -196,6 +196,7 @@ public:
         MakeTestEventStart();
     }
 
+
     void DoStart()
     {
         ts_.Add([]{
@@ -207,11 +208,11 @@ public:
         });
     }
 
-    void DoLockOnTime(const char *dateTime, bool expectEffect = true)
+
+
+    void DoLockOnTimeReqOnLockoutNo(const char *dateTime, bool expectEffect = true)
     {
-        ts_.Add([=]{
-            scheduler->OnGpsTimeLock(MakeFixTime(dateTime));
-        });
+        ts_.Add([=]{ scheduler->OnGpsTimeLock(MakeFixTime(dateTime)); });
 
         if (expectEffect)
         {
@@ -227,11 +228,30 @@ public:
         }
     }
 
-    void DoLock3DPlus(const char *dateTime)
+    void DoLockOnTimeReqOnLockoutOn(const char *dateTime)
     {
-        ts_.Add([=]{
-            scheduler->OnGps3DPlusLock(MakeFix3DPlus(dateTime));
-        });
+        ts_.Add([=]{ scheduler->OnGpsTimeLock(MakeFixTime(dateTime)); });
+        AddExpectedEvent("ON_GPS_LOCK_TIME_DURING_LOCKOUT");
+    }
+
+    void DoLockOnTimeReqNoLockoutNo(const char *dateTime)
+    {
+        ts_.Add([=]{ scheduler->OnGpsTimeLock(MakeFixTime(dateTime)); });
+        AddExpectedEvent("ON_GPS_TIME_LOCK_NOT_ACTIVE_NOT_LOCKOUT");
+    }
+
+    void DoLockOnTimeReqNoLockoutOn(const char *dateTime)
+    {
+        ts_.Add([=]{ scheduler->OnGpsTimeLock(MakeFixTime(dateTime)); });
+        AddExpectedEvent("ON_GPS_TIME_LOCK_NOT_ACTIVE_DURING_LOCKOUT");
+    }
+
+
+
+
+    void DoLock3DPlusReqOnLockoutNo(const char *dateTime)
+    {
+        ts_.Add([=]{ scheduler->OnGps3DPlusLock(MakeFix3DPlus(dateTime)); });
 
         AddExpectedEventList({
             "ON_GPS_3D_PLUS_LOCK",
@@ -240,6 +260,29 @@ public:
             "PREPARE_WINDOW_SCHEDULE_START",
         });
     }
+
+    void DoLock3DPlusReqOnLockoutOn(const char *dateTime)
+    {
+        ts_.Add([=]{ scheduler->OnGps3DPlusLock(MakeFix3DPlus(dateTime)); });
+        AddExpectedEvent("ON_GPS_LOCK_3D_PLUS_DURING_LOCKOUT");
+    }
+
+    void DoLock3DPlusReqNoLockoutNo(const char *dateTime)
+    {
+        ts_.Add([=]{ scheduler->OnGps3DPlusLock(MakeFix3DPlus(dateTime)); });
+        AddExpectedEvent("ON_GPS_LOCK_3D_PLUS_NOT_ACTIVE_NOT_LOCKOUT");
+    }
+
+    void DoLock3DPlusReqNoLockoutOn(const char *dateTime)
+    {
+        ts_.Add([=]{ scheduler->OnGps3DPlusLock(MakeFix3DPlus(dateTime)); });
+        AddExpectedEvent("ON_GPS_LOCK_3D_PLUS_NOT_ACTIVE_DURING_LOCKOUT");
+    }
+
+
+
+
+
 
 
     void AddExpectedWindowLockoutStartEndEvents()
@@ -351,7 +394,7 @@ void TestGpsEventsStartTime(TimerSequence &ts)
 {
     GpsEventsTestBuilder test(ts, __func__);
     test.DoStart();
-    test.DoLockOnTime("2025-01-01 12:10:00.500");
+    test.DoLockOnTimeReqOnLockoutNo("2025-01-01 12:10:00.500");
     test.AddExpectedEvent("COAST_TRIGGERED");
     test.AddExpectedWindowLockoutStartEndEvents();
     test.AddExpectedEvent("APPLY_CACHE_OLD_TIME");   // next window
@@ -363,8 +406,8 @@ void TestGpsEventsStartTimeTime(TimerSequence &ts)
 {
     GpsEventsTestBuilder test(ts, __func__);
     test.DoStart();
-    test.DoLockOnTime("2025-01-01 12:10:00.500");
-    test.DoLockOnTime("2025-01-01 12:10:00.600");
+    test.DoLockOnTimeReqOnLockoutNo("2025-01-01 12:10:00.500");
+    test.DoLockOnTimeReqOnLockoutNo("2025-01-01 12:10:00.600");
     test.AddExpectedEvent("COAST_TRIGGERED");
     test.AddExpectedWindowLockoutStartEndEvents();
     test.AddExpectedEvent("APPLY_CACHE_OLD_TIME");   // next window
@@ -376,7 +419,7 @@ void TestGpsEventsStart3d(TimerSequence &ts)
 {
     GpsEventsTestBuilder test(ts, __func__);
     test.DoStart();
-    test.DoLock3DPlus("2025-01-01 12:10:00.500");
+    test.DoLock3DPlusReqOnLockoutNo("2025-01-01 12:10:00.500");
     test.AddExpectedWindowLockoutStartEndEvents();
     test.AddExpectedEvent("APPLY_CACHE_OLD_3D_PLUS");   // next window
     test.StepFromInMs(1'000);
@@ -387,8 +430,8 @@ void TestGpsEventsStartTime3d(TimerSequence &ts)
 {
     GpsEventsTestBuilder test(ts, __func__);
     test.DoStart();
-    test.DoLockOnTime("2025-01-01 12:10:00.500");
-    test.DoLock3DPlus("2025-01-01 12:10:00.600");
+    test.DoLockOnTimeReqOnLockoutNo("2025-01-01 12:10:00.500");
+    test.DoLock3DPlusReqOnLockoutNo("2025-01-01 12:10:00.600");
     test.AddExpectedWindowLockoutStartEndEvents();
     test.AddExpectedEvent("APPLY_CACHE_OLD_3D_PLUS");   // next window
     test.StepFromInMs(1'000);
@@ -399,11 +442,11 @@ void TestGpsEventsStartTime3dTime(TimerSequence &ts)
 {
     GpsEventsTestBuilder test(ts, __func__);
     test.DoStart();
-    test.DoLockOnTime("2025-01-01 12:10:00.300");
-    test.DoLock3DPlus("2025-01-01 12:10:00.400");
-    test.DoLockOnTime("2025-01-01 12:10:00.500", false);
+    test.DoLockOnTimeReqOnLockoutNo("2025-01-01 12:10:00.300");
+    test.DoLock3DPlusReqOnLockoutNo("2025-01-01 12:10:00.400");
+    test.DoLockOnTimeReqNoLockoutNo("2025-01-01 12:10:00.500");
     test.AddExpectedWindowLockoutStartEndEvents();
-    test.AddExpectedEvent("APPLY_CACHE_OLD_TIME");   // next window
+    test.AddExpectedEvent("APPLY_CACHE_OLD_3D_PLUS");   // next window
     test.StepFromInMs(1'000);
     test.Finish();
 }
@@ -412,8 +455,8 @@ void TestGpsEventsStart3d3d(TimerSequence &ts)
 {
     GpsEventsTestBuilder test(ts, __func__);
     test.DoStart();
-    test.DoLock3DPlus("2025-01-01 12:10:00.400");
-    test.DoLock3DPlus("2025-01-01 12:10:00.500");
+    test.DoLock3DPlusReqOnLockoutNo("2025-01-01 12:10:00.400");
+    test.DoLock3DPlusReqNoLockoutNo("2025-01-01 12:10:00.500");
     test.AddExpectedWindowLockoutStartEndEvents();
     test.AddExpectedEvent("APPLY_CACHE_OLD_3D_PLUS");   // next window
     test.StepFromInMs(1'000);
@@ -424,11 +467,11 @@ void TestGpsEventsStart3d3dTime(TimerSequence &ts)
 {
     GpsEventsTestBuilder test(ts, __func__);
     test.DoStart();
-    test.DoLock3DPlus("2025-01-01 12:10:00.400");
-    test.DoLock3DPlus("2025-01-01 12:10:00.500");
-    test.DoLockOnTime("2025-01-01 12:10:00.600", false);
+    test.DoLock3DPlusReqOnLockoutNo("2025-01-01 12:10:00.400");
+    test.DoLock3DPlusReqNoLockoutNo("2025-01-01 12:10:00.500");
+    test.DoLockOnTimeReqNoLockoutNo("2025-01-01 12:10:00.600");
     test.AddExpectedWindowLockoutStartEndEvents();
-    test.AddExpectedEvent("APPLY_CACHE_OLD_TIME");   // next window
+    test.AddExpectedEvent("APPLY_CACHE_OLD_3D_PLUS");   // next window
     test.StepFromInMs(1'000);
     test.Finish();
 }

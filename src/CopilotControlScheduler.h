@@ -53,6 +53,8 @@ public:
 
 private:
 
+    bool reqGpsActive_ = false;
+
     function<void()> fnCbRequestNewGpsLock_       = []{};
     function<void()> fnCbCancelRequestNewGpsLock_ = []{};
 
@@ -60,19 +62,19 @@ private:
     {
         Mark("REQ_NEW_GPS_LOCK");
 
+        reqGpsActive_ = true;
+
         if (IsTesting() == false)
         {
             fnCbRequestNewGpsLock_();
         }
-
-
-        // set some flag that is used to reject GPS until this is reached
-
     }
 
     void CancelRequestNewGpsLock()
     {
         Mark("CANCEL_REQ_NEW_GPS_LOCK");
+
+        reqGpsActive_ = false;
 
         if (IsTesting() == false)
         {
@@ -374,7 +376,11 @@ public:
 
         Mark("STOP");
 
+        // no longer in running state
         running_ = false;
+        
+        // end gps request
+        reqGpsActive_ = false;
 
         // reset gps state
         scheduleDataActive_ = ScheduleData{};
@@ -425,7 +431,7 @@ public:
 
         uint64_t timeNowUs = PAL.Micros();
 
-        if (!inLockout_)
+        if (reqGpsActive_ == true && inLockout_ == false)
         {
             LogNL();
             Mark("ON_GPS_3D_PLUS_LOCK");
@@ -440,7 +446,7 @@ public:
                                                scheduleDataActive_.timeAtGpsFix3DPlusSetUs,
                                                true);
         }
-        else
+        else if (reqGpsActive_ == true && inLockout_ == true)
         {
             LogNL();
             Mark("ON_GPS_LOCK_3D_PLUS_DURING_LOCKOUT");
@@ -450,6 +456,18 @@ public:
             scheduleDataCache_.timeAtGpsFix3DPlusSetUs = timeNowUs;
             scheduleDataCache_.gpsFix3DPlus            = gpsFix3DPlus;
         }
+        else if (reqGpsActive_ == false && inLockout_ == false)
+        {
+            Mark("ON_GPS_LOCK_3D_PLUS_NOT_ACTIVE_NOT_LOCKOUT");
+
+            // ignore
+        }
+        else // reqGpsActive_ == false && inLockout_ == true
+        {
+            Mark("ON_GPS_LOCK_3D_PLUS_NOT_ACTIVE_DURING_LOCKOUT");
+
+            // ignore
+        }
     }
 
     void OnGpsTimeLock(const FixTime &gpsFixTime)
@@ -458,7 +476,7 @@ public:
 
         uint64_t timeNowUs = PAL.Micros();
 
-        if (!inLockout_)
+        if (reqGpsActive_ == true && inLockout_ == false)
         {
             LogNL();
 
@@ -483,7 +501,7 @@ public:
             }
             LogNL();
         }
-        else
+        else if (reqGpsActive_ == true && inLockout_ == true)
         {
             LogNL();
             Mark("ON_GPS_LOCK_TIME_DURING_LOCKOUT");
@@ -492,6 +510,18 @@ public:
             // cache
             scheduleDataCache_.timeAtGpsFixTimeSetUs = timeNowUs;
             scheduleDataCache_.gpsFixTime            = gpsFixTime;
+        }
+        else if (reqGpsActive_ == false && inLockout_ == false)
+        {
+            Mark("ON_GPS_TIME_LOCK_NOT_ACTIVE_NOT_LOCKOUT");
+
+            // ignore
+        }
+        else // reqGpsActive_ == false && inLockout_ == true
+        {
+            Mark("ON_GPS_TIME_LOCK_NOT_ACTIVE_DURING_LOCKOUT");
+
+            // ignore
         }
     }
 
