@@ -207,17 +207,24 @@ public:
         });
     }
 
-    void DoLockOnTime(const char *dateTime)
+    void DoLockOnTime(const char *dateTime, bool expectEffect = true)
     {
         ts_.Add([=]{
             scheduler->OnGpsTimeLock(MakeFixTime(dateTime));
         });
 
-        AddExpectedEventList({
-            "ON_GPS_TIME_LOCK",
-            "APPLY_TIME_AND_UPDATE_SCHEDULE",
-            "COAST_SCHEDULED",
-        });
+        if (expectEffect)
+        {
+            AddExpectedEventList({
+                "ON_GPS_TIME_LOCK_UPDATE_SCHEDULE",
+                "APPLY_TIME_AND_UPDATE_SCHEDULE",
+                "COAST_SCHEDULED",
+            });
+        }
+        else
+        {
+            AddExpectedEvent("ON_GPS_TIME_LOCK_NO_SCHEDULE_EFFECT");
+        }
     }
 
     void DoLock3DPlus(const char *dateTime)
@@ -230,6 +237,7 @@ public:
             "ON_GPS_3D_PLUS_LOCK",
             "APPLY_TIME_AND_UPDATE_SCHEDULE",
             "COAST_CANCELED",
+            "PREPARE_WINDOW_SCHEDULE_START",
         });
     }
 
@@ -387,10 +395,48 @@ void TestGpsEventsStartTime3d(TimerSequence &ts)
     test.Finish();
 }
 
+void TestGpsEventsStartTime3dTime(TimerSequence &ts)
+{
+    GpsEventsTestBuilder test(ts, __func__);
+    test.DoStart();
+    test.DoLockOnTime("2025-01-01 12:10:00.300");
+    test.DoLock3DPlus("2025-01-01 12:10:00.400");
+    test.DoLockOnTime("2025-01-01 12:10:00.500", false);
+    test.AddExpectedWindowLockoutStartEndEvents();
+    test.AddExpectedEvent("APPLY_CACHE_OLD_TIME");   // next window
+    test.StepFromInMs(1'000);
+    test.Finish();
+}
+
+void TestGpsEventsStart3d3d(TimerSequence &ts)
+{
+    GpsEventsTestBuilder test(ts, __func__);
+    test.DoStart();
+    test.DoLock3DPlus("2025-01-01 12:10:00.400");
+    test.DoLock3DPlus("2025-01-01 12:10:00.500");
+    test.AddExpectedWindowLockoutStartEndEvents();
+    test.AddExpectedEvent("APPLY_CACHE_OLD_3D_PLUS");   // next window
+    test.StepFromInMs(1'000);
+    test.Finish();
+}
+
+void TestGpsEventsStart3d3dTime(TimerSequence &ts)
+{
+    GpsEventsTestBuilder test(ts, __func__);
+    test.DoStart();
+    test.DoLock3DPlus("2025-01-01 12:10:00.400");
+    test.DoLock3DPlus("2025-01-01 12:10:00.500");
+    test.DoLockOnTime("2025-01-01 12:10:00.600", false);
+    test.AddExpectedWindowLockoutStartEndEvents();
+    test.AddExpectedEvent("APPLY_CACHE_OLD_TIME");   // next window
+    test.StepFromInMs(1'000);
+    test.Finish();
+}
 
 
 
-void CopilotControlScheduler::TestGpsEventInterface()
+
+void CopilotControlScheduler::TestGpsEventInterface(bool all)
 {
     scheduler = this;
     scheduler->Stop();
@@ -424,11 +470,17 @@ void CopilotControlScheduler::TestGpsEventInterface()
     TimerSequence ts;
 
     // tests
-    TestGpsEventsStart(ts);
-    TestGpsEventsStartTime(ts);
-    TestGpsEventsStartTimeTime(ts);
-    TestGpsEventsStart3d(ts);
-    TestGpsEventsStartTime3d(ts);
+    if (all)
+    {
+        TestGpsEventsStart(ts);
+        TestGpsEventsStartTime(ts);
+        TestGpsEventsStartTimeTime(ts);
+        TestGpsEventsStart3d(ts);
+        TestGpsEventsStartTime3d(ts);
+        TestGpsEventsStartTime3dTime(ts);
+        TestGpsEventsStart3d3d(ts);
+    }
+    TestGpsEventsStart3d3dTime(ts);
 
 
     // Complete

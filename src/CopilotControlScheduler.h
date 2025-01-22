@@ -461,8 +461,6 @@ public:
         if (!inLockout_)
         {
             LogNL();
-            Mark("ON_GPS_TIME_LOCK");
-            LogNL();
 
             // set active data
             scheduleDataActive_.timeAtGpsFixTimeSetUs = timeNowUs;
@@ -471,6 +469,8 @@ public:
             // Don't override an existing 3D fix
             if (scheduleDataActive_.timeAtGpsFix3DPlusSetUs == 0)
             {
+                Mark("ON_GPS_TIME_LOCK_UPDATE_SCHEDULE");
+
                 // apply
                 ScheduleApplyTimeAndUpdateSchedule(scheduleDataActive_.gpsFixTime,
                                                    scheduleDataActive_.timeAtGpsFixTimeSetUs,
@@ -478,8 +478,10 @@ public:
             }
             else
             {
+                Mark("ON_GPS_TIME_LOCK_NO_SCHEDULE_EFFECT");
                 // nothing to do
             }
+            LogNL();
         }
         else
         {
@@ -1365,7 +1367,7 @@ public: // for test running
     // Testing
     /////////////////////////////////////////////////////////////////
 
-    void TestGpsEventInterface();
+    void TestGpsEventInterface(bool all);
     void TestPrepareWindowSchedule();
     void TestConfigureWindowSlotBehavior();
     void TestCalculateTimeAtWindowStartUs(bool fullSweep = false);
@@ -1648,8 +1650,15 @@ public: // for test running
         }, { .argCount = 0, .help = ""});
 
         Shell::AddCommand("gps", [this](vector<string> argList){
-            TestGpsEventInterface();
-        }, { .argCount = 0, .help = ""});
+            bool all = false;
+
+            if (argList.size() >= 1)
+            {
+                all = (bool)atoi(argList[0].c_str());
+            }
+
+            TestGpsEventInterface(all);
+        }, { .argCount = -1, .help = ""});
 
         Shell::AddCommand("sched", [this](vector<string> argList){
             TestPrepareWindowSchedule();
