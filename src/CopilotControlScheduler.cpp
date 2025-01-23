@@ -481,25 +481,55 @@ void TestGpsEventsApplyTime3d(TimerSequence &ts)
 // Test Ignore GPS period.
 /////////////////////////////////////////////////
 
-void TestGpsEventsApply3dIgnoreTime(TimerSequence &ts)
+void TestGpsEventsApply3dIgnorePreLockoutTime(TimerSequence &ts)
 {
     GpsEventsTestBuilder test(ts, __func__);
     test.DoStart();
-    test.DoLock3DPlusReqOnLockoutNo("2025-01-01 12:10:00.100"); // +400ms = 00.400
-    test.DoLockOnTimeReqNoLockoutNo("2025-01-01 12:10:00.500");
+    test.DoLock3DPlusReqOnLockoutNo("2025-01-01 12:10:00.100"); // +400ms = 00.500
+    test.DoLockOnTimeReqNoLockoutNo("2025-01-01 12:10:00.500"); // ignored
     test.AddExpectedWindowLockoutStartEndEvents();
     test.AddExpectedEvent("APPLY_CACHE_OLD_3D_PLUS");   // next window
     test.DelayMs(1'400);
     test.Finish();
 }
 
-void TestGpsEventsApply3dIgnore3d(TimerSequence &ts)
+void TestGpsEventsApply3dIgnorePreLockout3d(TimerSequence &ts)
+{
+    GpsEventsTestBuilder test(ts, __func__);
+    test.DoStart();
+    test.DoLock3DPlusReqOnLockoutNo("2025-01-01 12:10:00.100"); // +400ms = 00.500
+    test.DoLock3DPlusReqNoLockoutNo("2025-01-01 12:10:00.500"); // ignored
+    test.AddExpectedWindowLockoutStartEndEvents();
+    test.AddExpectedEvent("APPLY_CACHE_OLD_3D_PLUS");   // next window
+    test.DelayMs(1'400);
+    test.Finish();
+}
+
+void TestGpsEventsApply3dIgnorePostLockoutTime(TimerSequence &ts)
 {
     GpsEventsTestBuilder test(ts, __func__);
     test.DoStart();
     test.DoLock3DPlusReqOnLockoutNo("2025-01-01 12:10:00.100"); // +400ms = 00.400
-    test.DoLock3DPlusReqNoLockoutNo("2025-01-01 12:10:00.500");
-    test.AddExpectedWindowLockoutStartEndEvents();
+                                                                // no need to wait, scheduled immediately
+    test.AddExpectedWindowLockoutStartEvent();
+    test.DoLockOnTimeReqNoLockoutOn("2025-01-01 12:10:00.500")  // ignored
+            .StartAtUs([]{ return scheduler->timerScheduleLockOutStart_.GetTimeoutAtUs(); });
+    test.AddExpectedWindowLockoutEndEvent();
+    test.AddExpectedEvent("APPLY_CACHE_OLD_3D_PLUS");   // next window
+    test.DelayMs(1'400);
+    test.Finish();
+}
+
+void TestGpsEventsApply3dIgnorePostLockout3d(TimerSequence &ts)
+{
+    GpsEventsTestBuilder test(ts, __func__);
+    test.DoStart();
+    test.DoLock3DPlusReqOnLockoutNo("2025-01-01 12:10:00.100"); // +400ms = 00.400
+                                                                // no need to wait, scheduled immediately
+    test.AddExpectedWindowLockoutStartEvent();
+    test.DoLock3DPlusReqNoLockoutOn("2025-01-01 12:10:00.500")  // ignored
+            .StartAtUs([]{ return scheduler->timerScheduleLockOutStart_.GetTimeoutAtUs(); });
+    test.AddExpectedWindowLockoutEndEvent();
     test.AddExpectedEvent("APPLY_CACHE_OLD_3D_PLUS");   // next window
     test.DelayMs(1'400);
     test.Finish();
@@ -518,25 +548,194 @@ void TestGpsEventsApplyTimeCacheTime(TimerSequence &ts)
     test.DelayMs(300);                                          // +300ms = 00.700 (within target)
     test.AddExpectedWindowLockoutStartEvent();
     test.DoLockOnTimeReqOnLockoutOn("2025-01-01 12:16:00.500")
-        .StartAtUs([]{
-            uint64_t timeAtUs = scheduler->timerTxDisableGpsEnable_.GetTimeoutAtUs();
-
-            Log("=============");
-            Log("Notional time currently: ", Time::GetNotionalTime());
-            Log("Timer notional time set: ", Time::GetNotionalTimeAtSystemUs(timeAtUs));
-            Log("=============");
-
-            return timeAtUs;
-        });
+        .StartAtUs([]{ return scheduler->timerTxDisableGpsEnable_.GetTimeoutAtUs(); });
     test.AddExpectedWindowLockoutEndEvent();
     test.AddExpectedEvent("APPLY_CACHE_NEW_TIME");   // next window
-    test.DelayMs(1'600);
+    test.DelayMs(1'100);
+    test.Finish();
+}
+
+void TestGpsEventsApplyTimeCacheTimeTime(TimerSequence &ts)
+{
+    GpsEventsTestBuilder test(ts, __func__);
+    test.DoStart();
+    test.DoLockOnTimeReqOnLockoutNo("2025-01-01 12:10:00.400"); // +200ms = 00.600
+    test.DelayMs(300);                                          // +300ms = 00.700 (within target)
+    test.AddExpectedWindowLockoutStartEvent();
+    test.DoLockOnTimeReqOnLockoutOn("2025-01-01 12:16:00.500")
+        .StartAtUs([]{ return scheduler->timerTxDisableGpsEnable_.GetTimeoutAtUs(); });
+    test.DoLockOnTimeReqOnLockoutOn("2025-01-01 12:16:00.600")
+        .StartAtUs([]{ return scheduler->timerTxDisableGpsEnable_.GetTimeoutAtUs(); });
+    test.AddExpectedWindowLockoutEndEvent();
+    test.AddExpectedEvent("APPLY_CACHE_NEW_TIME");   // next window
+    test.DelayMs(1'100);
+    test.Finish();
+}
+
+void TestGpsEventsApplyTimeCache3d(TimerSequence &ts)
+{
+    GpsEventsTestBuilder test(ts, __func__);
+    test.DoStart();
+    test.DoLockOnTimeReqOnLockoutNo("2025-01-01 12:10:00.400"); // +200ms = 00.600
+    test.DelayMs(300);                                          // +300ms = 00.700 (within target)
+    test.AddExpectedWindowLockoutStartEvent();
+    test.DoLock3DPlusReqOnLockoutOn("2025-01-01 12:16:00.500")
+        .StartAtUs([]{ return scheduler->timerTxDisableGpsEnable_.GetTimeoutAtUs(); });
+    test.AddExpectedWindowLockoutEndEvent();
+    test.AddExpectedEvent("APPLY_CACHE_NEW_3D_PLUS");   // next window
+    test.DelayMs(1'100);
+    test.Finish();
+}
+
+void TestGpsEventsApplyTimeCache3d3d(TimerSequence &ts)
+{
+    GpsEventsTestBuilder test(ts, __func__);
+    test.DoStart();
+    test.DoLockOnTimeReqOnLockoutNo("2025-01-01 12:10:00.400"); // +200ms = 00.600
+    test.DelayMs(300);                                          // +300ms = 00.700 (within target)
+    test.AddExpectedWindowLockoutStartEvent();
+    test.DoLock3DPlusReqOnLockoutOn("2025-01-01 12:16:00.500")
+        .StartAtUs([]{ return scheduler->timerTxDisableGpsEnable_.GetTimeoutAtUs(); });
+    test.DoLock3DPlusReqOnLockoutOn("2025-01-01 12:16:00.600")
+        .StartAtUs([]{ return scheduler->timerTxDisableGpsEnable_.GetTimeoutAtUs(); });
+    test.AddExpectedWindowLockoutEndEvent();
+    test.AddExpectedEvent("APPLY_CACHE_NEW_3D_PLUS");   // next window
+    test.DelayMs(1'100);
+    test.Finish();
+}
+
+void TestGpsEventsApplyTimeCacheTime3d(TimerSequence &ts)
+{
+    GpsEventsTestBuilder test(ts, __func__);
+    test.DoStart();
+    test.DoLockOnTimeReqOnLockoutNo("2025-01-01 12:10:00.400"); // +200ms = 00.600
+    test.DelayMs(300);                                          // +300ms = 00.700 (within target)
+    test.AddExpectedWindowLockoutStartEvent();
+    test.DoLockOnTimeReqOnLockoutOn("2025-01-01 12:16:00.500")
+        .StartAtUs([]{ return scheduler->timerTxDisableGpsEnable_.GetTimeoutAtUs(); });
+    test.DoLock3DPlusReqOnLockoutOn("2025-01-01 12:16:00.600")
+        .StartAtUs([]{ return scheduler->timerTxDisableGpsEnable_.GetTimeoutAtUs(); });
+    test.AddExpectedWindowLockoutEndEvent();
+    test.AddExpectedEvent("APPLY_CACHE_NEW_3D_PLUS");   // next window
+    test.DelayMs(1'100);
+    test.Finish();
+}
+
+void TestGpsEventsApplyTimeCache3dTime(TimerSequence &ts)
+{
+    GpsEventsTestBuilder test(ts, __func__);
+    test.DoStart();
+    test.DoLockOnTimeReqOnLockoutNo("2025-01-01 12:10:00.400"); // +200ms = 00.600
+    test.DelayMs(300);                                          // +300ms = 00.700 (within target)
+    test.AddExpectedWindowLockoutStartEvent();
+    test.DoLock3DPlusReqOnLockoutOn("2025-01-01 12:16:00.500")
+        .StartAtUs([]{ return scheduler->timerTxDisableGpsEnable_.GetTimeoutAtUs(); });
+    test.DoLockOnTimeReqOnLockoutOn("2025-01-01 12:16:00.600")
+        .StartAtUs([]{ return scheduler->timerTxDisableGpsEnable_.GetTimeoutAtUs(); });
+    test.AddExpectedWindowLockoutEndEvent();
+    test.AddExpectedEvent("APPLY_CACHE_NEW_3D_PLUS");   // next window
+    test.DelayMs(1'100);
     test.Finish();
 }
 
 
+void TestGpsEventsApply3dCacheTime(TimerSequence &ts)
+{
+    GpsEventsTestBuilder test(ts, __func__);
+    test.DoStart();
+    test.DoLock3DPlusReqOnLockoutNo("2025-01-01 12:10:00.500"); // +400ms = 00.900
+                                                                // no need to wait, scheduled immediately
+    test.AddExpectedWindowLockoutStartEvent();
+    test.DoLockOnTimeReqOnLockoutOn("2025-01-01 12:16:00.500")
+        .StartAtUs([]{ return scheduler->timerTxDisableGpsEnable_.GetTimeoutAtUs(); });
+    test.AddExpectedWindowLockoutEndEvent();
+    test.AddExpectedEvent("APPLY_CACHE_NEW_TIME");   // next window
+    test.DelayMs(1'000);
+    test.Finish();
+}
 
+void TestGpsEventsApply3dCacheTimeTime(TimerSequence &ts)
+{
+    GpsEventsTestBuilder test(ts, __func__);
+    test.DoStart();
+    test.DoLock3DPlusReqOnLockoutNo("2025-01-01 12:10:00.500"); // +400ms = 00.900
+                                                                // no need to wait, scheduled immediately
+    test.AddExpectedWindowLockoutStartEvent();
+    test.DoLockOnTimeReqOnLockoutOn("2025-01-01 12:16:00.500")
+        .StartAtUs([]{ return scheduler->timerTxDisableGpsEnable_.GetTimeoutAtUs(); });
+    test.DoLockOnTimeReqOnLockoutOn("2025-01-01 12:16:00.600")
+        .StartAtUs([]{ return scheduler->timerTxDisableGpsEnable_.GetTimeoutAtUs(); });
+    test.AddExpectedWindowLockoutEndEvent();
+    test.AddExpectedEvent("APPLY_CACHE_NEW_TIME");   // next window
+    test.DelayMs(1'000);
+    test.Finish();
+}
 
+void TestGpsEventsApply3dCache3d(TimerSequence &ts)
+{
+    GpsEventsTestBuilder test(ts, __func__);
+    test.DoStart();
+    test.DoLock3DPlusReqOnLockoutNo("2025-01-01 12:10:00.500"); // +400ms = 00.900
+                                                                // no need to wait, scheduled immediately
+    test.AddExpectedWindowLockoutStartEvent();
+    test.DoLock3DPlusReqOnLockoutOn("2025-01-01 12:16:00.500")
+        .StartAtUs([]{ return scheduler->timerTxDisableGpsEnable_.GetTimeoutAtUs(); });
+    test.AddExpectedWindowLockoutEndEvent();
+    test.AddExpectedEvent("APPLY_CACHE_NEW_3D_PLUS");   // next window
+    test.DelayMs(1'000);
+    test.Finish();
+}
+
+void TestGpsEventsApply3dCache3d3d(TimerSequence &ts)
+{
+    GpsEventsTestBuilder test(ts, __func__);
+    test.DoStart();
+    test.DoLock3DPlusReqOnLockoutNo("2025-01-01 12:10:00.500"); // +400ms = 00.900
+                                                                // no need to wait, scheduled immediately
+    test.AddExpectedWindowLockoutStartEvent();
+    test.DoLock3DPlusReqOnLockoutOn("2025-01-01 12:16:00.500")
+        .StartAtUs([]{ return scheduler->timerTxDisableGpsEnable_.GetTimeoutAtUs(); });
+    test.DoLock3DPlusReqOnLockoutOn("2025-01-01 12:16:00.600")
+        .StartAtUs([]{ return scheduler->timerTxDisableGpsEnable_.GetTimeoutAtUs(); });
+    test.AddExpectedWindowLockoutEndEvent();
+    test.AddExpectedEvent("APPLY_CACHE_NEW_3D_PLUS");   // next window
+    test.DelayMs(1'000);
+    test.Finish();
+}
+
+void TestGpsEventsApply3dCacheTime3d(TimerSequence &ts)
+{
+    GpsEventsTestBuilder test(ts, __func__);
+    test.DoStart();
+    test.DoLock3DPlusReqOnLockoutNo("2025-01-01 12:10:00.500"); // +400ms = 00.900
+                                                                // no need to wait, scheduled immediately
+    test.AddExpectedWindowLockoutStartEvent();
+    test.DoLockOnTimeReqOnLockoutOn("2025-01-01 12:16:00.500")
+        .StartAtUs([]{ return scheduler->timerTxDisableGpsEnable_.GetTimeoutAtUs(); });
+    test.DoLock3DPlusReqOnLockoutOn("2025-01-01 12:16:00.600")
+        .StartAtUs([]{ return scheduler->timerTxDisableGpsEnable_.GetTimeoutAtUs(); });
+    test.AddExpectedWindowLockoutEndEvent();
+    test.AddExpectedEvent("APPLY_CACHE_NEW_3D_PLUS");   // next window
+    test.DelayMs(1'000);
+    test.Finish();
+}
+
+void TestGpsEventsApply3dCache3dTime(TimerSequence &ts)
+{
+    GpsEventsTestBuilder test(ts, __func__);
+    test.DoStart();
+    test.DoLock3DPlusReqOnLockoutNo("2025-01-01 12:10:00.500"); // +400ms = 00.900
+                                                                // no need to wait, scheduled immediately
+    test.AddExpectedWindowLockoutStartEvent();
+    test.DoLock3DPlusReqOnLockoutOn("2025-01-01 12:16:00.500")
+        .StartAtUs([]{ return scheduler->timerTxDisableGpsEnable_.GetTimeoutAtUs(); });
+    test.DoLockOnTimeReqOnLockoutOn("2025-01-01 12:16:00.600")
+        .StartAtUs([]{ return scheduler->timerTxDisableGpsEnable_.GetTimeoutAtUs(); });
+    test.AddExpectedWindowLockoutEndEvent();
+    test.AddExpectedEvent("APPLY_CACHE_NEW_3D_PLUS");   // next window
+    test.DelayMs(1'000);
+    test.Finish();
+}
 
 
 
@@ -674,29 +873,32 @@ void CopilotControlScheduler::TestGpsEventInterface(vector<string> testNameList)
     // before lockout. Test GPS events in that Ignore period.
     if (Run("ignore") || Run("all"))
     {
-        TestGpsEventsApply3dIgnoreTime(ts);
-        TestGpsEventsApply3dIgnore3d(ts);
+        TestGpsEventsApply3dIgnorePreLockoutTime(ts);
+        TestGpsEventsApply3dIgnorePreLockout3d(ts);
+        TestGpsEventsApply3dIgnorePostLockoutTime(ts);
+        TestGpsEventsApply3dIgnorePostLockout3d(ts);
     }
 
     // Test Cache GPS period.
     if (Run("cache") || Run("all"))
     {
         TestGpsEventsApplyTimeCacheTime(ts);
+        TestGpsEventsApplyTimeCacheTimeTime(ts);
+        TestGpsEventsApplyTimeCache3d(ts);
+        TestGpsEventsApplyTimeCache3d3d(ts);
+        TestGpsEventsApplyTimeCacheTime3d(ts);
+        TestGpsEventsApplyTimeCache3dTime(ts);
+
+        TestGpsEventsApply3dCacheTime(ts);
+        TestGpsEventsApply3dCacheTimeTime(ts);
+        TestGpsEventsApply3dCache3d(ts);
+        TestGpsEventsApply3dCache3d3d(ts);
+        TestGpsEventsApply3dCacheTime3d(ts);
+        TestGpsEventsApply3dCache3dTime(ts);
     }
 
 
-    // TestGpsEventsApplyTimeCacheTimeTime(ts);
-    // TestGpsEventsApplyTimeCache3d(ts);
-    // TestGpsEventsApplyTimeCache3d3d(ts);
-    // TestGpsEventsApplyTimeCacheTime3d(ts);
-    // TestGpsEventsApplyTimeCache3dTime(ts);
 
-    // TestGpsEventsApply3dCacheTime(ts);
-    // TestGpsEventsApply3dCacheTimeTime(ts);
-    // TestGpsEventsApply3dCache3d(ts);
-    // TestGpsEventsApply3dCache3d3d(ts);
-    // TestGpsEventsApply3dCacheTime3d(ts);
-    // TestGpsEventsApply3dCache3dTime(ts);
 
 
 

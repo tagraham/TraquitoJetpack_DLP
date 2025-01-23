@@ -450,6 +450,7 @@ public:
         }
         else if (reqGpsActive_ == true && inLockout_ == true)
         {
+            LogNL();
             Mark("ON_GPS_LOCK_3D_PLUS_CACHED");
 
             // cache
@@ -458,12 +459,14 @@ public:
         }
         else if (reqGpsActive_ == false && inLockout_ == false)
         {
+            LogNL();
             Mark("ON_GPS_LOCK_3D_PLUS_REQ_NO_LOCKOUT_NO");
 
             // ignore
         }
         else // reqGpsActive_ == false && inLockout_ == true
         {
+            LogNL();
             Mark("ON_GPS_LOCK_3D_PLUS_REQ_NO_LOCKOUT_ON");
 
             // ignore
@@ -493,6 +496,7 @@ public:
         }
         else if (reqGpsActive_ == true && inLockout_ == true)
         {
+            LogNL();
             Mark("ON_GPS_LOCK_TIME_CACHED");
 
             // cache
@@ -501,12 +505,14 @@ public:
         }
         else if (reqGpsActive_ == false && inLockout_ == false)
         {
+            LogNL();
             Mark("ON_GPS_LOCK_TIME_REQ_NO_LOCKOUT_NO");
 
             // ignore
         }
         else // reqGpsActive_ == false && inLockout_ == true
         {
+            LogNL();
             Mark("ON_GPS_LOCK_TIME_REQ_NO_LOCKOUT_ON");
 
             // ignore
