@@ -10,6 +10,7 @@
 #include "Timeline.h"
 #include "Utl.h"
 
+#include <algorithm>
 #include <functional>
 #include <string>
 #include <unordered_map>
@@ -647,7 +648,7 @@ private:
             Mark("COAST_CANCELED");
 
             // cancel coast timer
-            tCoast_.Cancel();
+            timerCoast_.Cancel();
 
             // cancel gps request
             CancelRequestNewGpsLock();
@@ -660,7 +661,7 @@ private:
             // coast to be configured.
             // wait to trigger coast for as long as possible to give max time
             // for 3d fix to be acquired before giving up.
-            tCoast_.SetCallback([this]{
+            timerCoast_.SetCallback([this]{
                 Mark("COAST_TRIGGERED");
 
                 // cancel gps request
@@ -670,7 +671,7 @@ private:
                 ScheduleUpdateSchedule(false);
 
                 LogNL();
-            }, "TIMER_COAST_TRIGGERED");
+            });
 
             const uint64_t DURATION_SEVEN_SECS_US = 7 * 1'000 * 1'000;
             uint64_t COAST_LEAD_DURATION_US = DURATION_SEVEN_SECS_US;
@@ -684,7 +685,7 @@ private:
             // try to be a given duration earlier than the window, but don't go before timeNowUs
             uint64_t timeAtTriggerCoastUs = timeAtNextWindowStartUs -
                                             min(COAST_LEAD_DURATION_US, timeAtNextWindowStartUs - timeNowUs);
-            tCoast_.TimeoutAtUs(timeAtTriggerCoastUs);
+            timerCoast_.TimeoutAtUs(timeAtTriggerCoastUs);
 
             Mark("COAST_SCHEDULED");
             Log("Time now : ", Time::GetNotionalTimeAtSystemUs(timeNowUs));
@@ -826,25 +827,6 @@ public: // for test running
 
         return slotState.slotBehavior.msgSend != "none";
     }
-
-    bool PeriodWillRunJS(uint8_t period)
-    {
-        bool retVal;
-
-        if (period == 5)
-        {
-            retVal = false;
-        }
-        else
-        {
-            SlotState &slotState = GetSlotState(period + 1);
-
-            bool retVal = slotState.slotBehavior.runJs;
-        }
-
-        return retVal;
-    }
-
 
     // Periods are always scheduled to be run, because they execute javascript unconditionally.
     //
@@ -1025,7 +1007,6 @@ public: // for test running
         {
             LogNNL(" (changed, was ", msgSendOrig, ")");
         }
-        LogNL();
         LogNL();
 
         // return
@@ -1223,7 +1204,7 @@ public: // for test running
                 Mark("TX_WARMUP");
                 StartRadioWarmup();
                 LogNL();
-            }, "TIMER_TX_WARMUP");
+            });
             timerTxWarmup_.TimeoutAtUs(TIME_AT_WARMUP_US);
             Log("Scheduled ", TimeAt(TIME_AT_WARMUP_US), " for TX_WARMUP");
             Log("    ", Time::MakeDurationFromUs(DURATION_WANT_WARMUP_US), " early wanted");
@@ -1240,7 +1221,7 @@ public: // for test running
         // Setup Schedule Lock Out Start.
         timerScheduleLockOutStart_.SetCallback([this]{
             OnScheduleLockoutStart();
-        }, "TIMER_SCHEDULE_LOCK_OUT_START");
+        });
         timerScheduleLockOutStart_.TimeoutAtUs(TIME_AT_SCHEDULE_LOCK_OUT_START_US);
         Log("Scheduled ", TimeAt(TIME_AT_SCHEDULE_LOCK_OUT_START_US), " for SCHEDULE_LOCK_OUT_START");
         Log("    ", Time::MakeDurationFromUs(DURATION_WANT_PRE_WINDOW_US), " early wanted");
@@ -1267,7 +1248,7 @@ public: // for test running
             Mark("PERIOD0_START");
             DoPeriodBehavior(nullptr, 0, &slotState1_, "slot1");
             Mark("PERIOD0_END");
-        }, "TIMER_PERIOD0_START");
+        });
         timerPeriod0_.TimeoutAtUs(TIME_AT_PERIOD0_START_US);
         Log("Scheduled ", TimeAt(TIME_AT_PERIOD0_START_US), " for PERIOD0_START");
 
@@ -1275,7 +1256,7 @@ public: // for test running
             Mark("PERIOD1_START");
             DoPeriodBehavior(&slotState1_, 0, &slotState2_, "slot2");
             Mark("PERIOD1_END");
-        }, "TIMER_PERIOD1_START");
+        });
         timerPeriod1_.TimeoutAtUs(TIME_AT_PERIOD1_START_US);
         Log("Scheduled ", TimeAt(TIME_AT_PERIOD1_START_US), " for PERIOD1_START");
 
@@ -1283,7 +1264,7 @@ public: // for test running
             Mark("PERIOD2_START");
             DoPeriodBehavior(&slotState2_, 0, &slotState3_, "slot3");
             Mark("PERIOD2_END");
-        }, "TIMER_PERIOD2_START");
+        });
         timerPeriod2_.TimeoutAtUs(TIME_AT_PERIOD2_START_US);
         Log("Scheduled ", TimeAt(TIME_AT_PERIOD2_START_US), " for PERIOD2_START");
 
@@ -1291,7 +1272,7 @@ public: // for test running
             Mark("PERIOD3_START");
             DoPeriodBehavior(&slotState3_, 0, &slotState4_, "slot4");
             Mark("PERIOD3_END");
-        }, "TIMER_PERIOD3_START");
+        });
         timerPeriod3_.TimeoutAtUs(TIME_AT_PERIOD3_START_US);
         Log("Scheduled ", TimeAt(TIME_AT_PERIOD3_START_US), " for PERIOD3_START");
 
@@ -1299,7 +1280,7 @@ public: // for test running
             Mark("PERIOD4_START");
             DoPeriodBehavior(&slotState4_, 0, &slotState5_, "slot5");
             Mark("PERIOD4_END");
-        }, "TIMER_PERIOD4_START");
+        });
         timerPeriod4_.TimeoutAtUs(TIME_AT_PERIOD4_START_US);
         Log("Scheduled ", TimeAt(TIME_AT_PERIOD4_START_US), " for PERIOD4_START");
 
@@ -1309,7 +1290,7 @@ public: // for test running
             const uint64_t ONE_MINUTE_MS = 1 * 60 * 1'000;
             DoPeriodBehavior(&slotState5_, ONE_MINUTE_MS);
             Mark("PERIOD5_END");
-        }, "TIMER_PERIOD5_START");
+        });
         timerPeriod5_.TimeoutAtUs(TIME_AT_PERIOD5_START_US);
         Log("Scheduled ", TimeAt(TIME_AT_PERIOD5_START_US), " for PERIOD5_START");
 
@@ -1324,7 +1305,7 @@ public: // for test running
 
             // enable gps
             RequestNewGpsLock();
-        }, "TIMER_TX_DISABLE_GPS_ENABLE");
+        });
         if (TIME_AT_GPS_REQ_RESCHEDULED)
         {
             timerTxDisableGpsEnable_.TimeoutAtUs(TIME_AT_GPS_REQ_US);
@@ -1336,7 +1317,7 @@ public: // for test running
         // Setup Schedule Lock Out End.
         timerScheduleLockOutEnd_.SetCallback([this]{
             OnScheduleLockoutEnd();
-        }, "TIMER_SCHEDULE_LOCK_OUT_END");
+        });
         timerScheduleLockOutEnd_.TimeoutAtUs(TIME_AT_SCHEDULE_LOCK_OUT_END_US);
         Log("Scheduled ", TimeAt(TIME_AT_SCHEDULE_LOCK_OUT_END_US), " for SCHEDULE_LOCK_OUT_END");
 
@@ -1407,8 +1388,8 @@ public: // for test running
 
     void ResetTimers()
     {
-        tCoast_.Cancel();
-        tCoast_.SetVisibleInTimeline(false);
+        timerCoast_.Cancel();
+        timerCoast_.SetVisibleInTimeline(false);
         timerScheduleLockOutStart_.Cancel();
         timerScheduleLockOutStart_.SetVisibleInTimeline(false);
         timerPeriod0_.Cancel();
@@ -1431,23 +1412,121 @@ public: // for test running
         timerScheduleLockOutEnd_.SetVisibleInTimeline(false);
     }
 
+    // a positive shift means move the current time forward, which will
+    // cause the timers to expire sooner.
+    void ShiftTime(int64_t durationUs)
+    {
+        Mark("SHIFT_TIME");
+
+        // calculate
+        uint64_t timeNowUs         = PAL.Micros();
+        uint64_t notionalTimeWasUs = Time::GetNotionalUsAtSystemUs(timeNowUs);
+        uint64_t notionalTimeNowUs = notionalTimeWasUs + durationUs;
+
+        Log("Notional time was:  ", Time::MakeTimeFromUs(notionalTimeWasUs));
+        Log("Shifting time by : ",  Time::MakeTimeRelativeFromUs(notionalTimeNowUs, notionalTimeWasUs));
+        Log("Notional time now:  ", Time::MakeTimeFromUs(notionalTimeNowUs));
+
+        // change notional time
+        Time::SetNotionalUs(notionalTimeNowUs, timeNowUs);
+
+        // get list of timers in mostly-correct order, such that if they were
+        // stable sorted by timeout they'd be in timeout order (which takes
+        // into consideration the purposeful matching of expiry times that
+        // some timers do).
+        vector<Timer *> timerList = {
+            &timerCoast_,
+            &timerTxWarmup_,
+            &timerScheduleLockOutStart_,
+            &timerPeriod0_,
+            &timerPeriod1_,
+            &timerPeriod2_,
+            &timerPeriod3_,
+            &timerPeriod4_,
+            &timerPeriod5_,
+            &timerTxDisableGpsEnable_,
+            &timerScheduleLockOutEnd_,
+        };
+
+        // take a copy of the original order for reporting
+        vector<Timer *> timerListOriginalOrder = timerList;
+
+        // create helper to extract the timeouts into a list
+        auto GetTimeoutAtUsList = [](const vector<Timer *> &timerList){
+            vector<uint64_t> timeoutAtUsList;
+
+            for (const Timer *timer : timerList)
+            {
+                timeoutAtUsList.push_back(timer->GetTimeoutAtUs());
+            }
+
+            return timeoutAtUsList;
+        };
+
+        // get a list of the original timeouts
+        vector<uint64_t> timeoutAtUsListOrig = GetTimeoutAtUsList(timerListOriginalOrder);
+
+        // sort while retaining order of equal items
+        stable_sort(timerList.begin(), timerList.end(), [](auto t1, auto t2){
+            return t1->GetTimeoutAtUs() < t2->GetTimeoutAtUs();
+        });
+
+        // iterate sorted-by-expiry timer list, if pending, change timer by offset.
+        // by iterating in sorted order, we ensure that timers that had the same expiry
+        // end up on the same expiry again, in the same first-setter-wins order.
+        // if time is moving forward, expiry should happen sooner, so deduct from expiry.
+        for (Timer *timer : timerList)
+        {
+            if (timer->IsPending())
+            {
+                if (durationUs > 0)
+                {
+                    // ensure that the timer doesn't wrap around when subtracted
+                    timer->TimeoutAtUs(timer->GetTimeoutAtUs() - min((uint64_t)durationUs, timer->GetTimeoutAtUs()));
+                }
+                else
+                {
+                    timer->TimeoutAtUs(timer->GetTimeoutAtUs() - durationUs);
+                }
+            }
+        }
+
+        // get a list of the modified timeouts
+        vector<uint64_t> timeoutAtUsListNew = GetTimeoutAtUsList(timerListOriginalOrder);
+
+        // report on change to timers
+        auto Report = [](string name, uint8_t nameWidthTotal, uint64_t timeAtWasUs, uint64_t timeAtNowUs, uint64_t timeNowUs){
+            if (timeAtWasUs == timeAtNowUs)
+            {
+                Log(StrUtl::PadRight(name, ' ', nameWidthTotal), ": No Change");
+            }
+            else
+            {
+                // purposefully show the "changed by" as a positive number when adjusting timers to expire sooner.
+                // this means a positive shift results in a "positive" time change, even though we're actually
+                // deducting time from the timer.
+                Log(StrUtl::PadRight(name, ' ', nameWidthTotal), ": Changed by ", Time::MakeTimeRelativeFromUs(timeAtWasUs, timeAtNowUs));
+                Log("  Was: ", Time::MakeTimeRelativeFromUs(timeAtWasUs, timeNowUs));
+                Log("  Now: ", Time::MakeTimeRelativeFromUs(timeAtNowUs, timeNowUs));
+            }
+        };
+
+        LogNL();
+        Log("Shift Time Report");
+        uint8_t nameWidthTotal = strlen(timerScheduleLockOutStart_.GetName());
+        for (size_t i = 0; i < timerListOriginalOrder.size(); ++i)
+        {
+            Timer *timer = timerListOriginalOrder[i];
+            Report(timer->GetName(), nameWidthTotal, timeoutAtUsListOrig[i], timeoutAtUsListNew[i], timeNowUs);
+        }
+    }
+
     void PrintTimeAtDetails(string title, uint64_t timeNowUs, uint64_t timeAtUs)
     {
-        uint8_t startPadLen = title.size();
-
-        string untilStr;
-        if (timeNowUs <= timeAtUs)
-        {
-            untilStr += string{"in: "} + " " + Time::MakeTimeFromUs(timeAtUs - timeNowUs);
-        }
-        else
-        {
-            untilStr += string{"in: "} + "-" + Time::MakeTimeFromUs(timeNowUs - timeAtUs) + " (in the past)";
-        }
-
-        Log(StrUtl::PadRight(title, ' ', startPadLen), ": ", Time::GetNotionalTimeAtSystemUs(timeAtUs), " ", untilStr);
-        // Log("    (timeNowUs ", Time::MakeDateTimeFromUs(timeNowUs), ")");
-        // Log("    (timeAtUs  ", Time::MakeDateTimeFromUs(timeAtUs), ")");
+        LogNNL(StrUtl::PadRight(title, ' ', title.size()));
+        LogNNL(": ", Time::GetNotionalTimeAtSystemUs(timeAtUs));
+        LogNNL(" in: ", Time::MakeTimeRelativeFromUs(timeAtUs, timeNowUs));
+        LogNL();
     }
 
     void PrintStatus()
@@ -1471,11 +1550,11 @@ public: // for test running
         Log("Start/Stop Status: ", running_ ? "Started" : "Stopped");
         if (running_)
         {
-            bool coastScheduled = tCoast_.IsPending();
+            bool coastScheduled = timerCoast_.IsPending();
             Log("Coast            : ", coastScheduled ? "Scheduled" : "Not Scheduled");
             if (coastScheduled)
             {
-                PrintTimeAtDetails("Coast At         ", timeNowUs, tCoast_.GetTimeoutAtUs());
+                PrintTimeAtDetails("Coast At         ", timeNowUs, timerCoast_.GetTimeoutAtUs());
             }
             
             PrintTimeAtDetails("Window At        ", timeNowUs, timeAtUpcomingOrCurrentWindowStartUs);
@@ -1484,21 +1563,32 @@ public: // for test running
             Log("Window Scheduled : ", windowScheduled ? "Yes" : "No");
             if (windowScheduled)
             {
+                uint8_t titleWidth = 2 + strlen(timerScheduleLockOutStart_.GetName());
                 Log("In Window        : ", inLockout_ ? "Yes" : "No");
-                PrintTimeAtDetails("  timerTxWarmup_            ", timeNowUs, timerTxWarmup_.GetTimeoutAtUs()             );
-                PrintTimeAtDetails("  timerScheduleLockOutStart_", timeNowUs, timerScheduleLockOutStart_.GetTimeoutAtUs() );
-                PrintTimeAtDetails("  timerPeriod0_             ", timeNowUs, timerPeriod0_.GetTimeoutAtUs()              );
-                PrintTimeAtDetails("  timerPeriod1_             ", timeNowUs, timerPeriod1_.GetTimeoutAtUs()              );
-                PrintTimeAtDetails("  timerPeriod2_             ", timeNowUs, timerPeriod2_.GetTimeoutAtUs()              );
-                PrintTimeAtDetails("  timerPeriod3_             ", timeNowUs, timerPeriod3_.GetTimeoutAtUs()              );
-                PrintTimeAtDetails("  timerPeriod4_             ", timeNowUs, timerPeriod4_.GetTimeoutAtUs()              );
-                PrintTimeAtDetails("  timerPeriod5_             ", timeNowUs, timerPeriod5_.GetTimeoutAtUs()              );
-                PrintTimeAtDetails("  tTxDisableGpsEnable_      ", timeNowUs, timerTxDisableGpsEnable_.GetTimeoutAtUs()   );
-                PrintTimeAtDetails("  timerScheduleLockOutEnd_  ", timeNowUs, timerScheduleLockOutEnd_.GetTimeoutAtUs()   );
+
+                vector<Timer *> timerList = {
+                    &timerTxWarmup_,
+                    &timerScheduleLockOutStart_,
+                    &timerPeriod0_,
+                    &timerPeriod1_,
+                    &timerPeriod2_,
+                    &timerPeriod3_,
+                    &timerPeriod4_,
+                    &timerPeriod5_,
+                    &timerTxDisableGpsEnable_,
+                    &timerScheduleLockOutEnd_,
+                };
+
+                for (Timer *timer : timerList)
+                {
+                    string status = timer->IsPending() ? "pend" : "done";
+
+                    PrintTimeAtDetails(StrUtl::PadRight(string{"  "} + timer->GetName(), ' ', titleWidth) + " (" + status + ")", timeNowUs, timer->GetTimeoutAtUs());
+                }
             }
         }
 
-        t_.ReportNow();
+        // t_.ReportNow();
     }
     
     bool testing_ = false;
@@ -1658,7 +1748,7 @@ public: // for test running
     void SetNotionalTimeFromGpsTime(const FixTime &gpsFixTime, uint64_t timeAtGpsFixTimeSetUs)
     {
         uint64_t notionalTimeUs = MakeUsFromGps(gpsFixTime);
-        int64_t  offsetUs       = Time::SetNotionalDateTimeUs(notionalTimeUs, timeAtGpsFixTimeSetUs);
+        int64_t  offsetUs       = Time::SetNotionalUs(notionalTimeUs, timeAtGpsFixTimeSetUs);
 
         Mark("TIME_SYNC");
         Log("Time sync'd to GPS time: now ", Time::MakeDateTimeFromUs(notionalTimeUs));
@@ -1751,9 +1841,6 @@ public: // for test running
                 gpsFix3DPlus.millisecond = tp.us / 1'000;
                 gpsFix3DPlus.dateTime    = dateTime;
 
-                SetStartMinute(0);
-                Stop();
-                Start();
                 OnGps3DPlusLock(gpsFix3DPlus);
             }
             else if (type == "time")
@@ -1772,22 +1859,53 @@ public: // for test running
                 gpsFixTime.millisecond = tp.us / 1'000;
                 gpsFixTime.dateTime    = dateTime;
 
-                SetStartMinute(0);
-                Stop();
-                Start();
                 OnGpsTimeLock(gpsFixTime);
             }
             else
             {
-                Log("Invalid type");
+                Log("Invalid type - gps or time");
             }
         }, { .argCount = 1, .help = "test gps lock <type=gps|time>"});
+
+        Shell::AddCommand("shift", [this](vector<string> argList){
+            int64_t duration = stoll(argList[0].c_str());
+            string  unit     = argList[1];
+
+            if (unit == "us")
+            {
+                Log("Shifting time by ", duration, " us");
+                LogNL();
+                ShiftTime(duration);
+            }
+            else if (unit == "ms")
+            {
+                Log("Shifting time by ", duration, " ms");
+                LogNL();
+                ShiftTime(duration * 1'000);
+            }
+            else if (unit == "sec")
+            {
+                Log("Shifting time by ", duration, " second", duration == 1 ? "" : "s");
+                LogNL();
+                ShiftTime(duration * 1'000 * 1'000);
+            }
+            else if (unit == "min")
+            {
+                Log("Shifting time by ", duration, " minute", duration == 1 ? "" : "s");
+                LogNL();
+                ShiftTime(duration * 60 * 1'000 * 1'000);
+            }
+            else
+            {
+                Log("ERR: Unknown unit ", unit, ", no action taken.");
+            }
+        }, { .argCount = 2, .help = "shift time by <duration(signed)> [unit=us|ms|sec|min]"});
     }
 
 
 // private:
 
-    Timer tCoast_;
+    Timer timerCoast_ = {"TIMER_COAST"};
 
     SlotState slotState1_;
     SlotState slotState2_;
@@ -1795,16 +1913,16 @@ public: // for test running
     SlotState slotState4_;
     SlotState slotState5_;
 
-    Timer timerTxWarmup_;
-    Timer timerScheduleLockOutStart_;
-    Timer timerPeriod0_;
-    Timer timerPeriod1_;
-    Timer timerPeriod2_;
-    Timer timerPeriod3_;
-    Timer timerPeriod4_;
-    Timer timerPeriod5_;
-    Timer timerTxDisableGpsEnable_;
-    Timer timerScheduleLockOutEnd_;
+    Timer timerTxWarmup_             = {"TIMER_TX_WARMUP"};
+    Timer timerScheduleLockOutStart_ = {"TIMER_SCHEDULE_LOCK_OUT_START"};
+    Timer timerPeriod0_              = {"TIMER_PERIOD0_START"};
+    Timer timerPeriod1_              = {"TIMER_PERIOD1_START"};
+    Timer timerPeriod2_              = {"TIMER_PERIOD2_START"};
+    Timer timerPeriod3_              = {"TIMER_PERIOD3_START"};
+    Timer timerPeriod4_              = {"TIMER_PERIOD4_START"};
+    Timer timerPeriod5_              = {"TIMER_PERIOD5_START"};
+    Timer timerTxDisableGpsEnable_   = {"TIMER_TX_DISABLE_GPS_ENABLE"};
+    Timer timerScheduleLockOutEnd_   = {"TIMER_SCHEDULE_LOCK_OUT_END"};
 
     Timeline t_;
 
