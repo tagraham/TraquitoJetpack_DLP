@@ -96,10 +96,11 @@ public:
             Log("Watchdog enabled");
             LogNL();
 
-            tWatchdog_.SetCallback([]{
+            timerWatchdog_.SetName("TIMER_WATCHDOG_FEED");
+            timerWatchdog_.SetCallback([]{
                 Watchdog::Feed();
-            }, "TIMER_WATCHDOG_FEED");
-            tWatchdog_.TimeoutIntervalMs(2'000, 0);
+            });
+            timerWatchdog_.TimeoutIntervalMs(2'000, 0);
         }
 
         // set up blinker
@@ -152,10 +153,11 @@ public:
         Log("Determining startup mode");
         LogNL();
         // wait for USB events to fire
-        tStartupRole_.SetCallback([this]{
+        timerStartupRole_.SetName("TIMER_STARTUP_ROLE");
+        timerStartupRole_.SetCallback([this]{
             EnableMode();
         });
-        tStartupRole_.TimeoutInMs(1'000);
+        timerStartupRole_.TimeoutInMs(1'000);
     }
 
     void EnableMode()
@@ -223,15 +225,15 @@ public:
         ssGps_.EnableConfigurationMode();
 
         // announce the temperature regularly
-        static Timer tTemp;
-        tTemp.SetCallback([this]{
+        static Timer timerTemp("APP_TEMP_TIMER");
+        timerTemp.SetCallback([this]{
             router_.Send([&](const auto &out){
                 out["type"] = "TEMP";
                 out["tempC"] = tempSensor_.GetTempC();
                 out["tempF"] = tempSensor_.GetTempF();
             });
-        }, "APP_TEMP_TIMER");
-        tTemp.TimeoutIntervalMs(1000, 0);
+        });
+        timerTemp.TimeoutIntervalMs(1000, 0);
 
         if (enableBlink)
         {
@@ -307,7 +309,7 @@ public:
 
 
             // Set up scheduler
-            auto &scheduler = ssCc_.GetScheduler();
+            // auto &scheduler = ssCc_.GetScheduler();
             // ...
 
 
@@ -436,7 +438,8 @@ public:
         uint64_t timeNow = PAL.Millis();
 
         // set timer for radio on
-        tRadioOn_.SetCallback([this]{
+        timerRadioOn_.SetName("TIMER_APP_RADIO_ON");
+        timerRadioOn_.SetCallback([this]{
             // bring transmitter online
             t_.Event("Transmitter Starting");
 
@@ -450,14 +453,15 @@ public:
             BlinkerTransmit();
 
             t_.Event("Transmitter Online");
-        }, "TIMER_APP_RADIO_ON");
-        tRadioOn_.TimeoutInMs(delayRadioOnMs);
+        });
+        timerRadioOn_.TimeoutInMs(delayRadioOnMs);
 
         // set timer for TX
-        tSend_.SetCallback([this]{
+        timerSend_.SetName("TIMER_APP_TX");
+        timerSend_.SetCallback([this]{
             Send();
-        }, "TIMER_APP_TX");
-        tSend_.TimeoutInMs(delayTransmitMs);
+        });
+        timerSend_.TimeoutInMs(delayTransmitMs);
 
 
         // do some logging to explain the schedule
@@ -603,7 +607,8 @@ public:
     {
         static const uint32_t TWENTY_MINUTES = 20 * 60 * 1'000;
 
-        tGpsLockOrDie_.SetCallback([this]{
+        timerGpsLockOrDie_.SetName("TIMER_GPS_LOCK_OR_DIE");
+        timerGpsLockOrDie_.SetCallback([this]{
             LogModeSync();
 
             LogNL();
@@ -619,13 +624,13 @@ public:
             {
                 BlinkerBlinkOncePanic();
             }
-        }, "TIMER_GPS_LOCK_OR_DIE");
-        tGpsLockOrDie_.TimeoutInMs(TWENTY_MINUTES);
+        });
+        timerGpsLockOrDie_.TimeoutInMs(TWENTY_MINUTES);
     }
 
     void CancelGpsLockOrDieTimer()
     {
-        tGpsLockOrDie_.Cancel();
+        timerGpsLockOrDie_.Cancel();
     }
 
 
@@ -854,11 +859,11 @@ private:
 
     JSONMsgRouter::Iface router_;
 
-    Timer tStartupRole_;
-    Timer tRadioOn_;
-    Timer tSend_;
-    Timer tWatchdog_;
-    Timer tGpsLockOrDie_;
+    Timer timerStartupRole_;
+    Timer timerRadioOn_;
+    Timer timerSend_;
+    Timer timerWatchdog_;
+    Timer timerGpsLockOrDie_;
 
     Blinker blinker_;
 
