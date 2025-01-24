@@ -18,7 +18,7 @@ struct TestConfiguration
 {
     bool enabled = true;
 
-    bool fastStartEvmOnly = true;
+    bool fastStartEvmOnly = false;
 
     bool watchdogOn = true;
     bool logAsync = true;
@@ -302,26 +302,189 @@ public:
             // upcoming status blinks
             Watchdog::Feed();
             PAL.Delay(1'500);
+            Watchdog::Feed();
 
-
-
-
-
-
-            // Set up scheduler
-            // auto &scheduler = ssCc_.GetScheduler();
-            // ...
-
-
-
-
-
-
-
-
-            // Start
-            // scheduler.Start();
+            // Set up copilot control scheduler
+            SetupScheduler();
         }
+    }
+
+    void SetupScheduler()
+    {
+        ///////////////////////////////
+        // Get the scheduler
+        ///////////////////////////////
+        auto &scheduler = ssCc_.GetScheduler();
+
+        ///////////////////////////////
+        // GPS operation
+        ///////////////////////////////
+
+        Shell::AddCommand("now", [this, &scheduler](vector<string> argList){
+            // 2025-01-02 19:42:02.025000
+            fix_ = GPSReader::GetFix3DPlusExample();
+
+            // our debug channel = 414, so minute 6.
+            // change the time to start more quickly.
+            fix_.minute = 5;
+            fix_.second = 55;
+            fix_.dateTime = GPSReader::MakeDateTimeFromFixTime(fix_);
+
+            scheduler.OnGps3DPlusLock(fix_);
+        }, { .argCount = 0, .help = "trigger 3d lock"});
+
+        scheduler.SetCallbackRequestNewGpsLock([this, &scheduler]{
+
+            // disable for now
+            return;
+
+            t_.Reset();
+            t_.SetMaxEvents(50);
+            t_.Event("GPS_REQUESTED");
+
+            // ask gps to get a fix
+            if (testCfg.enabled == false)
+            {
+                ssGps_.DisableVerboseLogging();
+            }
+            ssGps_.EnableFlightMode();
+            t_.Event("GpsEnabled");
+
+            Log("Requesting Fix Time");
+            // todo
+            // this is good because it lets us send admin messages when no 3dfix
+
+
+            Log("Requesting Fix 3DPlus");
+            ssGps_.RequestNewFix3DPlus([this, &scheduler](const Fix3DPlus &fix){
+                t_.Event("Fix3DPlus");
+
+                // cancel timer
+                CancelGpsLockOrDieTimer();
+
+                // capture fix
+                fix_ = fix;
+
+                // tell scheduler
+                scheduler.OnGps3DPlusLock(fix_);
+            });
+
+            StartGpsLockOrDieTimer();
+            BlinkerGpsSearch();
+        });
+
+        scheduler.SetCallbackCancelRequestNewGpsLock([this]{
+
+            // disable for now
+            return;
+
+            // shut off gps
+            ssGps_.Disable();
+
+
+            // todo -- time events can keep the scheduler happy and willing to
+            // cancel the gps request. is that good?
+            //
+            // would I want the tracker to die if it can't get a 3d fix but
+            // can get a time fix?
+            //
+            // I think it's certainly a thing to consider.
+            // probably don't let x windows go by without a 3d fix.
+
+            CancelGpsLockOrDieTimer();
+            BlinkerIdle();
+        });
+
+        ///////////////////////////////
+        // Message sending
+        ///////////////////////////////
+        scheduler.SetCallbackSendRegularType1([this](){
+            const Configuration &txCfg = ssTx_.GetConfiguration();
+            static const uint8_t POWER_DBM = 13;
+
+            Log("Sending regular start");
+            ssTx_.SendRegularMessage(txCfg.callsign, fix_.maidenheadGrid.substr(0, 4), POWER_DBM);
+            Log("Sending regular done");
+        });
+
+        scheduler.SetCallbackSendBasicTelemetry([this](){
+            // get data needed to fill out encoded message
+            const Configuration &txCfg = ssTx_.GetConfiguration();
+            WsprChannelMap::ChannelDetails cd = WsprChannelMap::GetChannelDetails(txCfg.band.c_str(), txCfg.channel);
+
+            string   grid56    = fix_.maidenheadGrid.substr(4, 2);
+            uint32_t altM      = fix_.altitudeM < 0 ? 0 : fix_.altitudeM;
+            int8_t   tempC     = tempSensor_.GetTempC();
+            double   voltage   = (double)ADC::GetMilliVoltsVCC() / 1'000;  // capture under max load
+            bool     gpsValid  = true;
+
+            ssTx_.SendTelemetryBasic(
+                cd.id13,
+                grid56,
+                altM,
+                tempC,
+                voltage,
+                fix_.speedKnots,
+                gpsValid
+            );
+        });
+
+        scheduler.SetCallbackSendUserDefined([this](uint8_t slot, MsgUD &msg, uint64_t quitAfterMs){
+            const Configuration &txCfg = ssTx_.GetConfiguration();
+            WsprChannelMap::ChannelDetails cd = WsprChannelMap::GetChannelDetails(txCfg.band.c_str(), txCfg.channel);
+
+            msg.SetId13(cd.id13);
+            msg.SetHdrSlot(slot - 1);
+            msg.Encode();
+
+            Log("Sending User-Defined Message in slot", slot, " (limit ", Commas(quitAfterMs)," ms): ", msg.GetCallsign(), " ", msg.GetGrid4(), " ", msg.GetPowerDbm());
+            Log(CopilotControlUtl::GetMsgStateAsString(msg));
+            ssTx_.SetTxQuitAfterMs(quitAfterMs);
+            ssTx_.SendMessage(msg);
+            ssTx_.SetTxQuitAfterMs(0);
+            Log("Sent");
+        });
+
+        ///////////////////////////////
+        // Radio operation
+        ///////////////////////////////
+        scheduler.SetCallbackRadioIsActive([this]{
+            return ssTx_.IsOn();
+        });
+
+        scheduler.SetCallbackStartRadioWarmup([this]{
+            ssTx_.Enable();
+            ssTx_.RadioOn();
+            ssTx_.SetupTransmitterForFlight();
+
+            BlinkerTransmit();
+        });
+
+        scheduler.SetCallbackStopRadio([this]{
+            ssTx_.RadioOff();
+            ssTx_.Disable();
+        });
+
+        // Clock speed
+        scheduler.SetCallbackGoHighSpeed([this]{
+            // todo
+        });
+
+        scheduler.SetCallbackGoLowSpeed([this]{
+            // todo
+        });
+
+        ///////////////////////////////
+        // WSPR schedule
+        ///////////////////////////////
+        Configuration &txCfg = ssTx_.GetConfiguration();
+        auto cd = WsprChannelMap::GetChannelDetails(txCfg.band.c_str(), txCfg.channel);
+        scheduler.SetStartMinute(cd.min);
+
+        ///////////////////////////////
+        // Start
+        ///////////////////////////////
+        scheduler.Start();
     }
 
     /////////////////////////////////////////////////////////////////
@@ -684,7 +847,6 @@ private:
         // longer. ~70ms to accomplish.
         Log("Prepare 48MHz clock speed");
         Clock::PrepareClockMHz(48);
-
 
 
 
