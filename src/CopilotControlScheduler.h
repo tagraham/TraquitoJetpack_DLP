@@ -1905,6 +1905,12 @@ public: // for test running
                 Log("ERR: Unknown unit ", unit, ", no action taken.");
             }
         }, { .argCount = 2, .help = "shift time by <duration(signed)> [unit=us|ms|sec|min]"});
+
+        Shell::AddCommand("runjs", [this](vector<string> argList){
+            int slotNum = atoi(argList[0].c_str());
+
+            RunSlotJavaScript("slot" + to_string(slotNum));
+        }, { .argCount = 1, .help = "run js via RunSlotJavaScript() for slot <num>"});
     }
 
 
