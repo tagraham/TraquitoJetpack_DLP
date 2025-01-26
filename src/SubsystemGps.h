@@ -62,7 +62,8 @@ public:
         gpsReader_.StartMonitoring();
     }
 
-    void RequestNewFix3DPlus(function<void(const Fix3DPlus &fix)> fn)
+    void RequestNewFixTimeAnd3DPlus(function<void(const FixTime   &)> fnCbOnFixTime,
+                                    function<void(const Fix3DPlus &)> fnCbOnFix3dPlus)
     {
         static uint64_t timeStart;
         static uint8_t count;
@@ -72,13 +73,19 @@ public:
 
         gpsReader_.Reset();
 
-        gpsReader_.SetCallbackOnFixTime([this](const FixTime &fix){
-            Log("Got Fix Time   in ", Time::MakeTimeMMSSmmmFromUs(PAL.Millis() - timeStart), " at GPS Time ", fix.dateTime, " UTC");
+        gpsReader_.SetCallbackOnFixTime([=, this](const FixTime &fix){
+            Log("Got FixTime   in ", Time::MakeTimeMMSSmmmFromMs(PAL.Millis() - timeStart), " at GPS Time ", fix.dateTime, " UTC");
             fix.Print();
+
+            // GPS module already only lets time through when milliseconds are zero and
+            // a good time has been seen twice consecutively (and this callback is on
+            // the second). No additional filtering required here.
+            fnCbOnFixTime(fix);
+
             gpsReader_.UnSetCallbackOnFixTime();
         });
         gpsReader_.SetCallbackOnFix2D([this](const Fix2D &fix){
-            Log("Got Fix 2D     in ", Time::MakeTimeMMSSmmmFromUs(PAL.Millis() - timeStart), " at GPS Time ", fix.dateTime, " UTC");
+            Log("Got Fix 2D     in ", Time::MakeTimeMMSSmmmFromMs(PAL.Millis() - timeStart), " at GPS Time ", fix.dateTime, " UTC");
             fix.Print();
             gpsReader_.UnSetCallbackOnFix2D();
         });
@@ -91,10 +98,10 @@ public:
             // the data doesn't show any improvement in such a small delay.
             if (count == 2)
             {
-                Log("Got Fix 3DPlus in ", Time::MakeTimeMMSSmmmFromUs(PAL.Millis() - timeStart), " at GPS Time ", fix.dateTime, " UTC");
+                Log("Got Fix3DPlus in ", Time::MakeTimeMMSSmmmFromMs(PAL.Millis() - timeStart), " at GPS Time ", fix.dateTime, " UTC");
                 fix.Print();
                 LogNL();
-                fn(fix);
+                fnCbOnFix3dPlus(fix);
                 gpsReader_.UnSetCallbackOnFix3DPlus();
             }
         });
@@ -275,7 +282,7 @@ private:
                 gpsTimeline_.Event("GPS Time");
                 loggedOnceFixTime = true;
 
-                Log("FixTime acquired in ", Time::MakeTimeMMSSmmmFromUs(timeNow - timeStart));
+                Log("FixTime acquired in ", Time::MakeTimeMMSSmmmFromMs(timeNow - timeStart));
                 Log("GPS Time: ", fix.dateTime, " UTC");
                 Log("FixTime source: ", gpsReader_.GetFixTimeSource());
                 fix.Print();
@@ -316,7 +323,7 @@ private:
             {
                 gpsTimeline_.Event("GPS 2D");
                 loggedOnceFix2D = true;
-                Log("Fix2D acquired in ", Time::MakeTimeMMSSmmmFromUs(timeNow - timeStart));
+                Log("Fix2D acquired in ", Time::MakeTimeMMSSmmmFromMs(timeNow - timeStart));
                 Log("GPS Time at Fix2D: ", fix.dateTime, " UTC");
                 LogLatLng(fix);
                 Log("Fix2D source: ", gpsReader_.GetFix2DSource());
@@ -354,7 +361,7 @@ private:
             {
                 gpsTimeline_.Event("GPS 3D");
                 loggedOnceFix3D = true;
-                Log("Fix3D acquired in ", Time::MakeTimeMMSSmmmFromUs(timeNow - timeStart));
+                Log("Fix3D acquired in ", Time::MakeTimeMMSSmmmFromMs(timeNow - timeStart));
                 Log("GPS Time at Fix3D: ", fix.dateTime, " UTC");
                 LogLatLng(fix);
                 Log("AltM: ", Commas(fix.altitudeM), ", AltF: ", Commas(fix.altitudeFt));
@@ -384,7 +391,7 @@ private:
             {
                 gpsTimeline_.Event("GPS 3DPlus");
                 loggedOnceFix3DPlus = true;
-                Log("Fix3DPlus acquired in ", Time::MakeTimeMMSSmmmFromUs(timeNow - timeStart));
+                Log("Fix3DPlus acquired in ", Time::MakeTimeMMSSmmmFromMs(timeNow - timeStart));
                 Log("GPS Time at Fix3DPlus: ", fix.dateTime, " UTC");
                 LogLatLng(fix);
                 Log("AltM: ", Commas(fix.altitudeM), ", AltF: ", Commas(fix.altitudeFt));
@@ -436,8 +443,8 @@ private:
         // This function assumes we want a clean lock, so we just blindly
         // ignore everything for the next few seconds, since the GPS cannot
         // be synchronized against easily.
-        // Emperical observation shows this filters out some causes of
-        // erronious locking.
+        // Empirical observation shows this filters out some causes of
+        // erroneous locking.
         gpsReader_.ResetAndDelayProcessing(2'000);
 
         gpsTimeline_.Event("GPS Start");

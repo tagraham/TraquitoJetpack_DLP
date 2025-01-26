@@ -309,6 +309,11 @@ public:
         }
     }
 
+
+    /////////////////////////////////////////////////////////////////
+    // Scheduler Integration
+    /////////////////////////////////////////////////////////////////
+    
     void SetupScheduler()
     {
         SetupSchedulerGps();
@@ -326,29 +331,25 @@ public:
 
         Shell::AddCommand("now", [this, &scheduler](vector<string> argList){
             // 2025-01-02 19:42:02.025000
-            fix_ = GPSReader::GetFix3DPlusExample();
+            fix3dPlus_ = GPSReader::GetFix3DPlusExample();
 
             // our debug channel = 414, so minute 6.
             // change the time to start more quickly.
-            fix_.minute = 5;
-            fix_.second = 55;
-            fix_.dateTime = GPSReader::MakeDateTimeFromFixTime(fix_);
+            fix3dPlus_.minute = 5;
+            fix3dPlus_.second = 55;
+            fix3dPlus_.dateTime = GPSReader::MakeDateTimeFromFixTime(fix3dPlus_);
 
-            scheduler.OnGps3DPlusLock(fix_);
+            scheduler.OnGps3DPlusLock(fix3dPlus_);
         }, { .argCount = 0, .help = "trigger 3d lock"});
 
         scheduler.SetCallbackRequestNewGpsLock([this, &scheduler]{
             BlinkerGpsSearch();
 
-
-            // disable for now
-            return;
-
             t_.Reset();
             t_.SetMaxEvents(50);
             t_.Event("GPS_REQUESTED");
 
-            // ask gps to get a fix
+            // Enable GPS in preparation for new request
             if (testCfg.enabled == false)
             {
                 ssGps_.DisableVerboseLogging();
@@ -356,36 +357,42 @@ public:
             ssGps_.EnableFlightMode();
             t_.Event("GpsEnabled");
 
-            Log("Requesting Fix Time");
-            // todo
-            // this is good because it lets us send admin messages when no 3dfix
+            // Request new fix
+            Log("Requesting FixTime and Fix3DPlus");
+            
+            auto FnOnFixTime = [this, &scheduler](const FixTime &fixTime){
+                t_.Event("FixTime");
 
+                // tell scheduler
+                scheduler.OnGpsTimeLock(fixTime);
+            };
 
-            Log("Requesting Fix 3DPlus");
-            ssGps_.RequestNewFix3DPlus([this, &scheduler](const Fix3DPlus &fix){
+            auto FnOnFix3DPlus = [this, &scheduler](const Fix3DPlus &fix3dPlus){
                 t_.Event("Fix3DPlus");
 
                 // cancel timer
                 CancelGpsLockOrDieTimer();
 
                 // capture fix
-                fix_ = fix;
+                fix3dPlus_ = fix3dPlus;
 
                 // tell scheduler
-                scheduler.OnGps3DPlusLock(fix_);
-            });
+                scheduler.OnGps3DPlusLock(fix3dPlus_);
+            };
+
+            ssGps_.RequestNewFixTimeAnd3DPlus(FnOnFixTime, FnOnFix3DPlus);
             t_.Event("FixRequested");
+
+            // Setup timer to ensure we don't wait forever
             StartGpsLockOrDieTimer();
         });
 
         scheduler.SetCallbackCancelRequestNewGpsLock([this]{
             BlinkerIdle();
 
-            // disable for now
-            return;
-
             // shut off gps
             ssGps_.Disable();
+
 
 
             // todo -- time events can keep the scheduler happy and willing to
@@ -396,6 +403,8 @@ public:
             //
             // I think it's certainly a thing to consider.
             // probably don't let x windows go by without a 3d fix.
+
+
 
             CancelGpsLockOrDieTimer();
         });
@@ -410,7 +419,7 @@ public:
             static const uint8_t POWER_DBM = 13;
 
             Log("Sending regular start");
-            ssTx_.SendRegularMessage(txCfg.callsign, fix_.maidenheadGrid.substr(0, 4), POWER_DBM);
+            ssTx_.SendRegularMessage(txCfg.callsign, fix3dPlus_.maidenheadGrid.substr(0, 4), POWER_DBM);
             Log("Sending regular done");
         });
 
@@ -419,8 +428,8 @@ public:
             const Configuration &txCfg = ssTx_.GetConfiguration();
             WsprChannelMap::ChannelDetails cd = WsprChannelMap::GetChannelDetails(txCfg.band.c_str(), txCfg.channel);
 
-            string   grid56    = fix_.maidenheadGrid.substr(4, 2);
-            uint32_t altM      = fix_.altitudeM < 0 ? 0 : fix_.altitudeM;
+            string   grid56    = fix3dPlus_.maidenheadGrid.substr(4, 2);
+            uint32_t altM      = fix3dPlus_.altitudeM < 0 ? 0 : fix3dPlus_.altitudeM;
             int8_t   tempC     = tempSensor_.GetTempC();
             double   voltage   = (double)ADC::GetMilliVoltsVCC() / 1'000;  // capture under max load
             bool     gpsValid  = true;
@@ -431,7 +440,7 @@ public:
                 altM,
                 tempC,
                 voltage,
-                fix_.speedKnots,
+                fix3dPlus_.speedKnots,
                 gpsValid
             );
         });
@@ -518,280 +527,6 @@ public:
         scheduler.SetStartMinute(cd.min);
     }
 
-    /////////////////////////////////////////////////////////////////
-    // Default Flight Mode Schedule
-    /////////////////////////////////////////////////////////////////
-
-    void GetNextGPSLock()
-    {
-        t_.Reset();
-        t_.SetMaxEvents(50);
-        t_.Event("NO_TIME_NO_FIX");
-
-        // ask gps to get a fix
-        if (testCfg.enabled == false)
-        {
-            ssGps_.DisableVerboseLogging();
-        }
-        ssGps_.EnableFlightMode();
-        t_.Event("GpsEnabled");
-        Log("Requesting Fix 3DPlus");
-        ssGps_.RequestNewFix3DPlus([this](const Fix3DPlus &fix){
-            t_.Event("Fix3DPlus");
-
-            // cancel timer
-            CancelGpsLockOrDieTimer();
-
-            // capture fix
-            fix_ = fix;
-
-            // shut off gps
-            ssGps_.Disable();
-
-            // go to next state
-            ScheduleWarmupAndSend();
-        });
-        t_.Event("FixRequested");
-        StartGpsLockOrDieTimer();
-
-        BlinkerGpsSearch();
-    }
-
-    void ScheduleWarmupAndSend()
-    {
-        t_.Event("YES_TIME_YES_FIX__EARLY");
-
-        // figure out when to wake up to send this fix
-        const Configuration &txCfg = ssTx_.GetConfiguration();
-        WsprChannelMap::ChannelDetails cd = WsprChannelMap::GetChannelDetails(txCfg.band.c_str(), txCfg.channel);
-
-        uint8_t fixMinute = fix_.minute % 10;
-
-        if (testCfg.enabled)
-        {
-            // pick the next 2 min slot
-            cd.min = (fixMinute + (fixMinute % 2 ? 1 : 2)) % 10;
-        }
-
-        // determine minutes duration before target minute
-        uint8_t minBefore;
-        if (fixMinute < cd.min)
-        {
-            minBefore = cd.min - fixMinute;
-        }
-        else if (fixMinute == cd.min)
-        {
-            // only if we're literally on exactly the moment, then
-            // you can say zero time remaining.
-            // otherwise, the logic below will subtract time (from zero)
-            // and end up with a very long delay (which crashes the system)
-            if (fix_.second == 0 && fix_.millisecond == 0)
-            {
-                minBefore = 0;
-            }
-            else
-            {
-                minBefore = 10;
-            }
-        }
-        else // fixMinute > cd.min
-        {
-            // move forward to the next 10 minute cycle
-            // eg this is minute 8, I target minute 6
-            // 8 - 6 = 2
-            // 10 - 2 = 8; therefore I wait 8 minutes
-            // 8 minutes after the minute 8 is the 6th minute, that's my target
-            minBefore = (10 - (fixMinute - cd.min));
-        }
-
-        // calculate ms difference
-        uint32_t delayTransmitMs = minBefore * 60 * 1'000;
-
-        // give credit for how far into this minute we are already
-        delayTransmitMs -= (fix_.second * 1'000);
-        delayTransmitMs -= fix_.millisecond;
-
-        // and actually supposed to be at :01, so add a little fudge
-        // factor in there, tuned emperically.
-        // (we're late in our timing anyway so don't overdo it)
-        static const int32_t FUDGE_MS = -40;
-        delayTransmitMs += FUDGE_MS;
-
-        // to avoid TX drift, we want to turn the radio on a while before sending
-        static const uint32_t RADIO_ON_EARLY_TARGET_MS = 30'000;
-        uint32_t delayRadioOnMs;
-        if (delayTransmitMs >= RADIO_ON_EARLY_TARGET_MS)
-        {
-            delayRadioOnMs = delayTransmitMs - RADIO_ON_EARLY_TARGET_MS;
-        }
-        else if (delayTransmitMs < RADIO_ON_EARLY_TARGET_MS)
-        {
-            delayRadioOnMs = 0;
-        }
-
-        uint64_t timeNow = PAL.Millis();
-
-        // set timer for radio on
-        timerRadioOn_.SetName("TIMER_APP_RADIO_ON");
-        timerRadioOn_.SetCallback([this]{
-            // bring transmitter online
-            t_.Event("Transmitter Starting");
-
-            Log("Radio warmup starting");
-            Log("RTC Now: ", Time::MakeTimeMMSSmmmFromUs(PAL.Millis()));
-
-            ssTx_.Enable();
-            ssTx_.RadioOn();
-            ssTx_.SetupTransmitterForFlight();
-
-            BlinkerTransmit();
-
-            t_.Event("Transmitter Online");
-        });
-        timerRadioOn_.TimeoutInMs(delayRadioOnMs);
-
-        // set timer for TX
-        timerSend_.SetName("TIMER_APP_TX");
-        timerSend_.SetCallback([this]{
-            Send();
-        });
-        timerSend_.TimeoutInMs(delayTransmitMs);
-
-
-        // do some logging to explain the schedule
-        uint32_t fixTimeAsMs     = (fix_.minute * 60 * 1'000) + (fix_.second * 1'000) + fix_.millisecond;
-        uint32_t radioOnTimeAsMs = fixTimeAsMs + delayRadioOnMs;
-        uint32_t txTimeAsMs      = fixTimeAsMs + delayTransmitMs;
-
-        string timeGpsNow                = Time::MakeTimeMMSSmmmFromUs(fixTimeAsMs);
-        string timeRadioOn               = Time::MakeTimeMMSSmmmFromUs(radioOnTimeAsMs);
-        string timeRadioOnDuration       = Time::MakeTimeMMSSmmmFromUs(delayRadioOnMs);
-        string durationRadioOnEarly      = Time::MakeTimeMMSSmmmFromUs(delayTransmitMs - delayRadioOnMs);
-        string durationRadioDelayWanted  = Time::MakeTimeMMSSmmmFromUs(RADIO_ON_EARLY_TARGET_MS);
-        string timeTx                    = Time::MakeTimeMMSSmmmFromUs(txTimeAsMs);
-        string timeTxDuration            = Time::MakeTimeMMSSmmmFromUs(delayTransmitMs);
-
-        LogNL();
-        Log("Scheduling TX to GPS time");
-        LogNL();
-        Log("GPS Now  : ", timeGpsNow);
-        Log("  Radio  : ", timeRadioOn, " (", timeRadioOnDuration, " from now, ", durationRadioOnEarly, " early, wanted ", durationRadioDelayWanted, ")");
-        Log("  TX     : ", timeTx,      " (", timeTxDuration,      " from now)");
-        Log("  Target : _", cd.min, ":00.000");
-        LogNL();
-        Log("RTC Now      : ", Time::MakeTimeMMSSmmmFromUs(timeNow));
-        Log("  Radio on at: ", Time::MakeTimeMMSSmmmFromUs(timeNow + delayRadioOnMs));
-        Log("  TX    on at: ", Time::MakeTimeMMSSmmmFromUs(timeNow + delayTransmitMs));
-        LogNL();
-
-        t_.Event("Scheduled");
-
-        BlinkerIdle();
-    }
-
-    void Send()
-    {
-        t_.Event("YES_TIME_YES_FIX__TIME_TO_SEND");
-
-        Log("Regular message sending start");
-        Log("RTC Now: ", Time::MakeTimeMMSSmmmFromUs(PAL.Millis()));
-
-        // retrieve flight configuration
-        const Configuration &txCfg = ssTx_.GetConfiguration();
-
-        // take note of the time the sending of the regular message begins
-        uint64_t timeSendRegular = PAL.Millis();
-
-        // send regular message
-        static const uint8_t POWER_DBM = 13;
-        ssTx_.SendRegularMessage(txCfg.callsign, fix_.maidenheadGrid.substr(0, 4), POWER_DBM);
-        LogNL();
-
-        t_.Event("Regular Message Sent");
-
-        if (testCfg.enabled && testCfg.sendEncoded == false)
-        {
-            Timeline::Global().Report();
-            BlinkerIdle();
-
-            LogNL();
-            Log("Not sending encoded message");
-            LogNL();
-
-            GetNextGPSLock();
-            return;
-        }
-
-        // purposefully do not turn the radio off, the longer it
-        // runs the more stable the frequency (less drift)
-
-        // delay to send the U4B message
-        uint64_t timeSinceRegular = PAL.Millis() - timeSendRegular;
-        const uint32_t EXPECTED_DELAY_START_REGULAR_TO_START_U4B = 2 * 60 * 1'000;    // 2 min
-
-        uint32_t delayToU4bMs = 0;
-        if (timeSinceRegular < EXPECTED_DELAY_START_REGULAR_TO_START_U4B)
-        {
-            delayToU4bMs = EXPECTED_DELAY_START_REGULAR_TO_START_U4B - timeSinceRegular;
-        }
-
-        // emperically determined
-        static int32_t FUDGE_MS_U4B = -75;
-        delayToU4bMs += FUDGE_MS_U4B;
-
-        // feed watchdog while waiting
-        while (delayToU4bMs)
-        {
-            Watchdog::Feed();
-
-            uint32_t delayMs = min(WSPR_BIT_DURATION_MS, delayToU4bMs);
-            blinker_.Toggle();
-            PAL.DelayBusy(delayMs);
-
-            delayToU4bMs -= delayMs;
-        }
-        Watchdog::Feed();
-
-        t_.Event("Waited for U4B Send Time");
-
-        Log("Encoded message sending start");
-        Log("RTC Now: ", Time::MakeTimeMMSSmmmFromUs(PAL.Millis()));
-
-        // get data needed to fill out encoded message
-        WsprChannelMap::ChannelDetails cd = WsprChannelMap::GetChannelDetails(txCfg.band.c_str(), txCfg.channel);
-
-        string   grid56    = fix_.maidenheadGrid.substr(4, 2);
-        uint32_t altM      = fix_.altitudeM < 0 ? 0 : fix_.altitudeM;
-        int8_t   tempC     = tempSensor_.GetTempC();
-        double   voltage   = (double)ADC::GetMilliVoltsVCC() / 1'000;  // capture under max load
-        bool     gpsValid  = true;
-
-        ssTx_.SendTelemetryBasic(
-            cd.id13,
-            grid56,
-            altM,
-            tempC,
-            voltage,
-            fix_.speedKnots,
-            gpsValid
-        );
-        LogNL();
-
-        t_.Event("U4B Message Sent");
-
-        // bring transmitter offline
-        ssTx_.RadioOff();
-        ssTx_.Disable();
-
-        t_.Event("Transmitter Offline");
-        t_.ReportNow();
-
-        BlinkerIdle();
-
-        // get the next fix
-        GetNextGPSLock();
-    }
-
 
     /////////////////////////////////////////////////////////////////
     // GPS Lock Or Die timer
@@ -872,7 +607,7 @@ private:
     {
         Log("Power saving processing");
 
-        // prepare to swtich to 48MHz in the event that USB is connected
+        // prepare to switch to 48MHz in the event that USB is connected
         // later.  willing to take a moment longer on high power to
         // speed up calculation and make device startup not annoyingly
         // longer. ~70ms to accomplish.
@@ -904,7 +639,7 @@ private:
 
         // Set up USB to be off unless VBUS detected, but we'll get notified
         // before USB re-enabled so we can get up to speed to handle the bus.
-        // emperically I see 45MHz is the minimum required but let's do 48MHz
+        // empirically I see 45MHz is the minimum required but let's do 48MHz
         // just because.        
         USB::SetCallbackVbusConnected([]{
             Log("App VBUS HIGH handler, switching to 48MHz");
@@ -1021,7 +756,7 @@ private:
     SubsystemGps ssGps_;
     SubsystemTx ssTx_;
 
-    Fix3DPlus fix_;
+    Fix3DPlus fix3dPlus_;
 
     JSONMsgRouter::Iface router_;
 
