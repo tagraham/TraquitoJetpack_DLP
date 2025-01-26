@@ -634,7 +634,7 @@ void TestGpsEventsApplyTimeCache3d3d(TimerSequence &ts)
     test.AddExpectedWindowLockoutStartEvent();
     test.DoLock3DPlusReqOnLockoutOn("2025-01-01 12:16:00.500")
         .StartAtUs([]{ return scheduler->timerTxDisableGpsEnable_.GetTimeoutAtUs(); });
-    test.DoLock3DPlusReqOnLockoutOn("2025-01-01 12:16:00.600")
+    test.DoLock3DPlusReqNoLockoutOn("2025-01-01 12:16:00.600")
         .StartAtUs([]{ return scheduler->timerTxDisableGpsEnable_.GetTimeoutAtUs(); });
     test.AddExpectedWindowLockoutEndEvent();
     test.AddExpectedEvent("APPLY_CACHE_NEW_3D_PLUS");   // next window
@@ -668,7 +668,7 @@ void TestGpsEventsApplyTimeCache3dTime(TimerSequence &ts)
     test.AddExpectedWindowLockoutStartEvent();
     test.DoLock3DPlusReqOnLockoutOn("2025-01-01 12:16:00.500")
         .StartAtUs([]{ return scheduler->timerTxDisableGpsEnable_.GetTimeoutAtUs(); });
-    test.DoLockOnTimeReqOnLockoutOn("2025-01-01 12:16:00.600")
+    test.DoLockOnTimeReqNoLockoutOn("2025-01-01 12:16:00.600")
         .StartAtUs([]{ return scheduler->timerTxDisableGpsEnable_.GetTimeoutAtUs(); });
     test.AddExpectedWindowLockoutEndEvent();
     test.AddExpectedEvent("APPLY_CACHE_NEW_3D_PLUS");   // next window
@@ -733,7 +733,7 @@ void TestGpsEventsApply3dCache3d3d(TimerSequence &ts)
     test.AddExpectedWindowLockoutStartEvent();
     test.DoLock3DPlusReqOnLockoutOn("2025-01-01 12:16:00.500")
         .StartAtUs([]{ return scheduler->timerTxDisableGpsEnable_.GetTimeoutAtUs(); });
-    test.DoLock3DPlusReqOnLockoutOn("2025-01-01 12:16:00.600")
+    test.DoLock3DPlusReqNoLockoutOn("2025-01-01 12:16:00.600")
         .StartAtUs([]{ return scheduler->timerTxDisableGpsEnable_.GetTimeoutAtUs(); });
     test.AddExpectedWindowLockoutEndEvent();
     test.AddExpectedEvent("APPLY_CACHE_NEW_3D_PLUS");   // next window
@@ -767,7 +767,7 @@ void TestGpsEventsApply3dCache3dTime(TimerSequence &ts)
     test.AddExpectedWindowLockoutStartEvent();
     test.DoLock3DPlusReqOnLockoutOn("2025-01-01 12:16:00.500")
         .StartAtUs([]{ return scheduler->timerTxDisableGpsEnable_.GetTimeoutAtUs(); });
-    test.DoLockOnTimeReqOnLockoutOn("2025-01-01 12:16:00.600")
+    test.DoLockOnTimeReqNoLockoutOn("2025-01-01 12:16:00.600")
         .StartAtUs([]{ return scheduler->timerTxDisableGpsEnable_.GetTimeoutAtUs(); });
     test.AddExpectedWindowLockoutEndEvent();
     test.AddExpectedEvent("APPLY_CACHE_NEW_3D_PLUS");   // next window
