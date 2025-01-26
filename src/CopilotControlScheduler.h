@@ -447,6 +447,8 @@ public:
             scheduleDataActive_.gpsFix3DPlus            = gpsFix3DPlus;
             scheduleDataActive_.timeAtGpsFix3DPlusSetUs = timeNowUs;
 
+            CancelRequestNewGpsLock();
+
             // apply
             ScheduleApplyTimeAndUpdateSchedule(scheduleDataActive_.gpsFix3DPlus,
                                                scheduleDataActive_.timeAtGpsFix3DPlusSetUs,
@@ -460,6 +462,8 @@ public:
             // cache
             scheduleDataCache_.gpsFix3DPlus            = gpsFix3DPlus;
             scheduleDataCache_.timeAtGpsFix3DPlusSetUs = timeNowUs;
+
+            CancelRequestNewGpsLock();
         }
         else if (reqGpsActive_ == false && inLockout_ == false)
         {
@@ -652,9 +656,6 @@ private:
 
             // cancel coast timer
             timerCoast_.Cancel();
-
-            // cancel gps request
-            CancelRequestNewGpsLock();
 
             // schedule now
             ScheduleUpdateSchedule(true);
@@ -1330,6 +1331,11 @@ public: // for test running
 
         Mark("PREPARE_WINDOW_SCHEDULE_END");
 
+        if (IsTesting() == false)
+        {
+            PrintStatus();
+        }
+
         t_.Reset();
     }
 
@@ -1752,8 +1758,13 @@ public: // for test running
 
     void SetNotionalTimeFromGpsTime(const FixTime &gpsFixTime, uint64_t timeAtGpsFixTimeSetUs)
     {
+        // capture prior configuration for difference calculation
+        uint64_t oldTimeNowUs      = Time::GetSystemUsAtLastTimeChange();
+        uint64_t oldNotionalTimeUs = Time::GetNotionalUsAtSystemUs(oldTimeNowUs);
+
+        // set notional time
         uint64_t notionalTimeUs = MakeUsFromGps(gpsFixTime);
-        int64_t  offsetUs       = Time::SetNotionalUs(notionalTimeUs, timeAtGpsFixTimeSetUs);
+        Time::SetNotionalUs(notionalTimeUs, timeAtGpsFixTimeSetUs);
 
         Mark("TIME_SYNC");
         Log("Time sync'd to GPS time: now ", Time::MakeDateTimeFromUs(notionalTimeUs));
@@ -1767,17 +1778,29 @@ public: // for test running
         }
         else
         {
-            if (offsetUs < 0)
+            // Calculate the relative difference in clock accuracy between reports.
+            //
+            // Difficulty -- The GPS Time vs GPS 3D time is missing the date portion,
+            // so the offsetUs calculated by SetNotionalUs is way off.
+            //
+            // We only care about the relative time difference.
+            const uint64_t DURATION_24_HOURS_US = 24ULL * 60ULL * 60ULL * 1'000ULL * 1'000ULL;
+
+            int64_t offsetRelativeUs = (int64_t)
+                ((notionalTimeUs    % DURATION_24_HOURS_US) - (timeAtGpsFixTimeSetUs % DURATION_24_HOURS_US)) -
+                ((oldNotionalTimeUs % DURATION_24_HOURS_US) - (oldTimeNowUs          % DURATION_24_HOURS_US));
+
+            if (offsetRelativeUs < 0)
             {
-                Log("    Prior time was running fast by ", Time::MakeDurationFromUs((uint64_t)-offsetUs));
+                Log("    Prior time was running fast by ", Time::MakeDurationFromUs((uint64_t)-offsetRelativeUs));
             }
-            else if (offsetUs == 0)
+            else if (offsetRelativeUs == 0)
             {
                 Log("    Time was unchanged");
             }
-            else // offsetUs > 0
+            else // offsetRelativeUs > 0
             {
-                Log("    Prior time was running slow by ", Time::MakeDurationFromUs((uint64_t)offsetUs));
+                Log("    Prior time was running slow by ", Time::MakeDurationFromUs((uint64_t)offsetRelativeUs));
             }
         }
     }
