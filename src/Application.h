@@ -335,6 +335,7 @@ public:
 
             // our debug channel = 414, so minute 6.
             // change the time to start more quickly.
+            fix3dPlus_.timeAtPpsUs = PAL.Micros();
             fix3dPlus_.minute = 5;
             fix3dPlus_.second = 55;
             fix3dPlus_.dateTime = GPSReader::MakeDateTimeFromFixTime(fix3dPlus_);

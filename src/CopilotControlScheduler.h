@@ -437,7 +437,7 @@ public:
     {
         if (running_ == false) { return; }
 
-        uint64_t timeNowUs = PAL.Micros();
+        uint64_t timeNowUs = gpsFix3DPlus.timeAtPpsUs;
 
         if (reqGpsActive_ == true && inLockout_ == false)
         {
@@ -487,7 +487,7 @@ public:
     {
         if (running_ == false) { return; }
 
-        uint64_t timeNowUs = PAL.Micros();
+        uint64_t timeNowUs = gpsFixTime.timeAtPpsUs;
 
         if (reqGpsActive_ == true && inLockout_ == false)
         {
@@ -1862,6 +1862,7 @@ public: // for test running
                 auto tp = Time::ParseDateTime(dateTime);
 
                 Fix3DPlus gpsFix3DPlus;
+                gpsFix3DPlus.timeAtPpsUs = PAL.Micros();
                 gpsFix3DPlus.year        = tp.year;
                 gpsFix3DPlus.hour        = tp.hour;
                 gpsFix3DPlus.minute      = tp.minute;
@@ -1880,6 +1881,7 @@ public: // for test running
                 auto tp = Time::ParseDateTime(dateTime);
 
                 FixTime gpsFixTime;
+                gpsFixTime.timeAtPpsUs = PAL.Micros();
                 gpsFixTime.year        = tp.year;
                 gpsFixTime.hour        = tp.hour;
                 gpsFixTime.minute      = tp.minute;

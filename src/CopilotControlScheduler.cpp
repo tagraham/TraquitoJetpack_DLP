@@ -158,6 +158,7 @@ static Fix3DPlus MakeFix3DPlus(const char *dateTime)
     auto tp = Time::ParseDateTime(dateTime);
 
     Fix3DPlus gpsFix;
+    gpsFix.timeAtPpsUs = PAL.Micros();
     gpsFix.year        = tp.year;
     gpsFix.hour        = tp.hour;
     gpsFix.minute      = tp.minute;
