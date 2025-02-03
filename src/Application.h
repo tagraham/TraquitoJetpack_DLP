@@ -364,6 +364,9 @@ public:
             auto FnOnFixTime = [this, &scheduler](const FixTime &fixTime){
                 t_.Event("FixTime");
 
+                // cancel timer
+                CancelGpsLockOrDieTimer();
+
                 // tell scheduler
                 scheduler.OnGpsTimeLock(fixTime);
             };
@@ -377,6 +380,9 @@ public:
                 // capture fix
                 fix3dPlus_ = fix3dPlus;
 
+                // note that the 3d fix was acquired
+                gotFix3dPlus_ = true;
+
                 // tell scheduler
                 scheduler.OnGps3DPlusLock(fix3dPlus_);
             };
@@ -389,25 +395,14 @@ public:
         });
 
         scheduler.SetCallbackCancelRequestNewGpsLock([this]{
+            // consider whether too much coasting
+            MaybeDieIfTooMuchCoasting();
+
+            // indicate idle state
             BlinkerIdle();
 
             // shut off gps
             ssGps_.Disable();
-
-
-
-            // todo -- time events can keep the scheduler happy and willing to
-            // cancel the gps request. is that good?
-            //
-            // would I want the tracker to die if it can't get a 3d fix but
-            // can get a time fix?
-            //
-            // I think it's certainly a thing to consider.
-            // probably don't let x windows go by without a 3d fix.
-
-
-
-            CancelGpsLockOrDieTimer();
         });
     }
 
@@ -530,7 +525,7 @@ public:
 
 
     /////////////////////////////////////////////////////////////////
-    // GPS Lock Or Die timer
+    // GPS health
     /////////////////////////////////////////////////////////////////
     
     void StartGpsLockOrDieTimer()
@@ -561,6 +556,53 @@ public:
     void CancelGpsLockOrDieTimer()
     {
         timerGpsLockOrDie_.Cancel();
+    }
+
+    void MaybeDieIfTooMuchCoasting()
+    {
+        // The strategy around GPS locking has two limits:
+        // - Any attempt at a lock can take no more than the max timeout
+        //   - This applies to getting either a time lock or 3d lock
+        // - The system can coast for no more than 2 consecutive windows
+        //
+        // The consequences are:
+        // - In a default configuration, where 3d fix required, and only coasting
+        //   - the time before reset will be the sum of:
+        //     - duration to get first time lock (less than 20 min)
+        //     - two windows (20 min)
+        //     - duration to learn going to coast again (0 min)
+        //       - this will be within the second window, so zero additional time
+        //     - this is longer than 20 minutes but less than 40
+        //     - this also means the gps will be off/on twice during that time, which
+        //       maybe resolves the issue anyway
+
+        // check if coasting
+        if (gotFix3dPlus_) { coastCount_ = 0; }
+        else               { ++coastCount_;   }
+
+        // reset coast detection state for next window
+        gotFix3dPlus_ = false;
+
+        // consider if coasting too much
+        const uint8_t COAST_COUNT_MAX = 2;
+        if (coastCount_ > COAST_COUNT_MAX)
+        {
+            LogModeSync();
+
+            LogNL();
+            Log("Coast attempt exceeds limit (", coastCount_, " would exceed max of ", COAST_COUNT_MAX, " consecutive)");
+
+            // hard reset GPS
+            Log("Hard Resetting GPS");
+            ssGps_.ModuleHardReset();
+
+            // reboot via watchdog kill
+            Log("Rebooting via Watchdog death");
+            while (true)
+            {
+                BlinkerBlinkOncePanic();
+            }
+        }
     }
 
 
@@ -758,6 +800,8 @@ private:
     SubsystemTx ssTx_;
 
     Fix3DPlus fix3dPlus_;
+    bool gotFix3dPlus_ = false;
+    uint8_t coastCount_ = 0;
 
     JSONMsgRouter::Iface router_;
 
