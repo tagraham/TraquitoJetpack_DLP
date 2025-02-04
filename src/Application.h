@@ -395,6 +395,8 @@ public:
         });
 
         scheduler.SetCallbackCancelRequestNewGpsLock([this]{
+            t_.Event("CancelReqNewGpsLock");
+
             // consider whether too much coasting
             MaybeDieIfTooMuchCoasting();
 
@@ -553,25 +555,36 @@ public:
     void SendVendorDefined()
     {
         // set up message
-        // { "name": "DurBeforeTimeLock", "unit": "Seconds", "lowValue":  0,  "highValue": 1200,  "stepSize": 1 },
-        // { "name": "DurGpsOn",          "unit": "Seconds", "lowValue":  0,  "highValue": 1800,  "stepSize": 1 },
+        // { "name": "DurBeforeTimeLock", "unit": "Seconds", "lowValue":  0,  "highValue": 1200,  "stepSize":  5 },
+        // { "name": "DurGpsOn",          "unit": "Seconds", "lowValue":  0,  "highValue": 1800,  "stepSize": 10 },
+        // { "name": "SatsGP",            "unit": "Count",   "lowValue":  0,  "highValue":   32,  "stepSize":  1 },
+        // { "name": "SatsBD",            "unit": "Count",   "lowValue":  0,  "highValue":   45,  "stepSize":  1 },
         const char *fieldDurBeforeTimeLock = "DurBeforeTimeLockSeconds";
         const char *fieldDurGpsOn          = "DurGpsOnSeconds";
+        const char *fieldSatsGP            = "SatsGPCount";
+        const char *fieldSatsBD            = "SatsBDCount";
 
         msgVd_.ResetEverything();
-        msgVd_.DefineField(fieldDurBeforeTimeLock, 0, 1200, 1);
-        msgVd_.DefineField(fieldDurGpsOn,          0, 1800, 1);
+        msgVd_.DefineField(fieldDurBeforeTimeLock, 0, 1200,  5);
+        msgVd_.DefineField(fieldDurGpsOn,          0, 1800, 10);
+        msgVd_.DefineField(fieldSatsGP,            0,   32,  1);
+        msgVd_.DefineField(fieldSatsBD,            0,   45,  1);
 
         // calculate field values
         uint64_t durBeforeTimeLockUs  = t_.GetTimeAtEvent("FixTime") - t_.GetTimeAtEvent("GpsEnabled");
         uint64_t durBeforeTimeLockSec = durBeforeTimeLockUs / 1'000'000;
 
-        uint64_t durGpsOnUs  = PAL.Micros() - t_.GetTimeAtEvent("GpsEnabled");
+        uint64_t durGpsOnUs  = t_.GetTimeAtEvent("CancelReqNewGpsLock") - t_.GetTimeAtEvent("GpsEnabled");
         uint64_t durGpsOnSec = durGpsOnUs / 1'000'000;
+
+        uint8_t satsGP = ssGps_.GetGPSReader().GetSatelliteDataGPList().size();
+        uint8_t satsBD = ssGps_.GetGPSReader().GetSatelliteDataBDList().size();
 
         // fill out
         msgVd_.Set(fieldDurBeforeTimeLock, durBeforeTimeLockSec);
-        msgVd_.Set(fieldDurGpsOn, durGpsOnSec);
+        msgVd_.Set(fieldDurGpsOn,          durGpsOnSec);
+        msgVd_.Set(fieldSatsGP,            satsGP);
+        msgVd_.Set(fieldSatsBD,            satsBD);
 
         // configure and encode
         const Configuration &txCfg = ssTx_.GetConfiguration();
@@ -584,7 +597,9 @@ public:
         // log
         Log("Sending VendorDefined message");
         Log("- ", fieldDurBeforeTimeLock, " = ", Commas(durBeforeTimeLockSec));
-        Log("- ", fieldDurGpsOn, " = ", Commas(durGpsOnSec));
+        Log("- ", fieldDurGpsOn,          " = ", Commas(durGpsOnSec));
+        Log("- ", fieldSatsGP,            " = ", Commas(satsGP));
+        Log("- ", fieldSatsBD,            " = ", Commas(satsBD));
 
         // send
         ssTx_.SendMessage(msgVd_);

@@ -137,6 +137,12 @@ public:
         ModulePowerOffBatteryOn();
     }
 
+    GPSReader &GetGPSReader()
+    {
+        return gpsReader_;
+    }
+    
+
 private:
 
     void StartMonitorLockSequenceWeb()
