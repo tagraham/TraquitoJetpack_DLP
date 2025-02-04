@@ -411,6 +411,9 @@ public:
         auto &scheduler = ssCc_.GetScheduler();
 
         scheduler.SetCallbackScheduleNow([this, &scheduler](bool haveGpsLock){
+            scheduler.UnSetCallbackSendDefault(1);
+            scheduler.UnSetCallbackSendDefault(2);
+            
             if (haveGpsLock)
             {
                 scheduler.SetCallbackSendDefault(1, true, [this](uint8_t, uint64_t){ SendRegularType1();   });
@@ -418,25 +421,12 @@ public:
             }
             else
             {
-                scheduler.UnSetCallbackSendDefault(1);
-                scheduler.UnSetCallbackSendDefault(2);
+                scheduler.SetCallbackSendDefault(1, false, [this](uint8_t, uint64_t){ SendVendorDefined(); });
             }
         });
 
         scheduler.SetCallbackSendUserDefined([this](uint8_t slot, MsgUD &msg, uint64_t quitAfterMs){
-            const Configuration &txCfg = ssTx_.GetConfiguration();
-            WsprChannelMap::ChannelDetails cd = WsprChannelMap::GetChannelDetails(txCfg.band.c_str(), txCfg.channel);
-
-            msg.SetId13(cd.id13);
-            msg.SetHdrSlot(slot - 1);
-            msg.Encode();
-
-            Log("Sending User-Defined Message in slot", slot, " (limit ", Commas(quitAfterMs)," ms): ", msg.GetCallsign(), " ", msg.GetGrid4(), " ", msg.GetPowerDbm());
-            Log(CopilotControlUtl::GetMsgStateAsString(msg));
-            ssTx_.SetTxQuitAfterMs(quitAfterMs);
-            ssTx_.SendMessage(msg);
-            ssTx_.SetTxQuitAfterMs(0);
-            Log("Sent");
+            SendUserDefined(slot, msg, quitAfterMs);
         });
     }
 
@@ -542,6 +532,64 @@ public:
             gpsValid
         );
     };
+
+    void SendUserDefined(uint8_t slot, MsgUD &msg, uint64_t quitAfterMs)
+    {
+        const Configuration &txCfg = ssTx_.GetConfiguration();
+        WsprChannelMap::ChannelDetails cd = WsprChannelMap::GetChannelDetails(txCfg.band.c_str(), txCfg.channel);
+
+        msg.SetId13(cd.id13);
+        msg.SetHdrSlot(slot - 1);
+        msg.Encode();
+
+        Log("Sending User-Defined Message in slot", slot, " (limit ", Commas(quitAfterMs)," ms): ", msg.GetCallsign(), " ", msg.GetGrid4(), " ", msg.GetPowerDbm());
+        Log(CopilotControlUtl::GetMsgStateAsString(msg));
+        ssTx_.SetTxQuitAfterMs(quitAfterMs);
+        ssTx_.SendMessage(msg);
+        ssTx_.SetTxQuitAfterMs(0);
+        Log("Sent");
+    }
+
+    void SendVendorDefined()
+    {
+        // set up message
+        // { "name": "DurBeforeTimeLock", "unit": "Seconds", "lowValue":  0,  "highValue": 1200,  "stepSize": 1 },
+        // { "name": "DurGpsOn",          "unit": "Seconds", "lowValue":  0,  "highValue": 1800,  "stepSize": 1 },
+        const char *fieldDurBeforeTimeLock = "DurBeforeTimeLockSeconds";
+        const char *fieldDurGpsOn          = "DurGpsOnSeconds";
+
+        msgVd_.ResetEverything();
+        msgVd_.DefineField(fieldDurBeforeTimeLock, 0, 1200, 1);
+        msgVd_.DefineField(fieldDurGpsOn,          0, 1800, 1);
+
+        // calculate field values
+        uint64_t durBeforeTimeLockUs  = t_.GetTimeAtEvent("FixTime") - t_.GetTimeAtEvent("GpsEnabled");
+        uint64_t durBeforeTimeLockSec = durBeforeTimeLockUs / 1'000'000;
+
+        uint64_t durGpsOnUs  = PAL.Micros() - t_.GetTimeAtEvent("GpsEnabled");
+        uint64_t durGpsOnSec = durGpsOnUs / 1'000'000;
+
+        // fill out
+        msgVd_.Set(fieldDurBeforeTimeLock, durBeforeTimeLockSec);
+        msgVd_.Set(fieldDurGpsOn, durGpsOnSec);
+
+        // configure and encode
+        const Configuration &txCfg = ssTx_.GetConfiguration();
+        WsprChannelMap::ChannelDetails cd = WsprChannelMap::GetChannelDetails(txCfg.band.c_str(), txCfg.channel);
+
+        msgVd_.SetId13(cd.id13);
+        msgVd_.SetHdrSlot(0);
+        msgVd_.Encode();
+
+        // log
+        Log("Sending VendorDefined message");
+        Log("- ", fieldDurBeforeTimeLock, " = ", Commas(durBeforeTimeLockSec));
+        Log("- ", fieldDurGpsOn, " = ", Commas(durGpsOnSec));
+
+        // send
+        ssTx_.SendMessage(msgVd_);
+        Log("Sent");
+    }
 
 
     /////////////////////////////////////////////////////////////////
@@ -826,12 +874,13 @@ private:
     JSONMsgRouter::Iface router_;
 
     Timer timerStartupRole_;
-    Timer timerRadioOn_;
-    Timer timerSend_;
     Timer timerWatchdog_;
     Timer timerGpsLockOrDie_;
 
     Blinker blinker_;
+
+    using MsgVD = WsprMessageTelemetryExtendedVendorDefined<29>;
+    static inline MsgVD msgVd_;
 
     Timeline t_;
 

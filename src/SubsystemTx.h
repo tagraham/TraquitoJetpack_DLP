@@ -187,6 +187,8 @@ public:
 
     void SendMessage(const WsprMessageRegularType1 &msg)
     {
+        Log("Transmitting WSPR Type1: ", msg.GetCallsign(), " ", msg.GetGrid4(), " ", msg.GetPowerDbm());
+
         wsprMessageTransmitter_.Send(msg.GetCallsign(), msg.GetGrid4(), msg.GetPowerDbm());
     }
 
