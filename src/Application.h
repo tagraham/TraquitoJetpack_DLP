@@ -423,7 +423,7 @@ public:
             }
             else
             {
-                scheduler.SetCallbackSendDefault(1, false, [this](uint8_t, uint64_t){ SendVendorDefined(); });
+                scheduler.SetCallbackSendDefault(1, false, [this](uint8_t, uint64_t){ SendVendorDefinedGpsData(); });
             }
         });
 
@@ -552,7 +552,7 @@ public:
         Log("Sent");
     }
 
-    void SendVendorDefined()
+    void SendVendorDefinedGpsData()
     {
         // set up message
         // { "name": "DurBeforeTimeLock", "unit": "Seconds", "lowValue":  0,  "highValue": 1200,  "stepSize":  5 },
@@ -571,11 +571,19 @@ public:
         msgVd_.DefineField(fieldSatsBD,            0,   45,  1);
 
         // calculate field values
-        uint64_t durBeforeTimeLockUs  = t_.GetTimeAtEvent("FixTime") - t_.GetTimeAtEvent("GpsEnabled");
-        uint64_t durBeforeTimeLockSec = durBeforeTimeLockUs / 1'000'000;
+        uint64_t durBeforeTimeLockSec = 0;
+        if (t_.GetTimeAtEvent("FixTime") >= t_.GetTimeAtEvent("GpsEnabled"))
+        {
+            uint64_t durBeforeTimeLockUs  = t_.GetTimeAtEvent("FixTime") - t_.GetTimeAtEvent("GpsEnabled");
+            durBeforeTimeLockSec = durBeforeTimeLockUs / 1'000'000;
+        }
 
-        uint64_t durGpsOnUs  = t_.GetTimeAtEvent("CancelReqNewGpsLock") - t_.GetTimeAtEvent("GpsEnabled");
-        uint64_t durGpsOnSec = durGpsOnUs / 1'000'000;
+        uint64_t durGpsOnSec = 0;
+        if (t_.GetTimeAtEvent("CancelReqNewGpsLock") >= t_.GetTimeAtEvent("GpsEnabled"))
+        {
+            uint64_t durGpsOnUs  = t_.GetTimeAtEvent("CancelReqNewGpsLock") - t_.GetTimeAtEvent("GpsEnabled");
+            durGpsOnSec = durGpsOnUs / 1'000'000;
+        }
 
         uint8_t satsGP = ssGps_.GetGPSReader().GetSatelliteDataGPList().size();
         uint8_t satsBD = ssGps_.GetGPSReader().GetSatelliteDataBDList().size();
