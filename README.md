@@ -2,6 +2,8 @@
 
 This is the source code for the [Traquito Jetpack WSPR tracker](https://traquito.github.io/tracker/).
 
+This project relies heavily on the [https://github.com/dmalnati/picoinf](https://github.com/dmalnati/picoinf){:target="_blank"} project.
+
 Note:
 - This is not an Arduino program
 - This is a C++ program, you build the app, you flash directly to the pico via SWD (eg via [JLink](https://www.segger.com/products/debug-probes/j-link/models/j-link-edu-mini/))
