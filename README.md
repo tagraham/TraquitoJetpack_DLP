@@ -8,8 +8,8 @@ Ready-to-flash UF2 files - no build required:
 
 | Version | Description | Download |
 |---------|-------------|----------|
-| **Standard** | Dual clock output (CLK0 + CLK1) - Maximum power | [TraquitoJetpack_Standard.uf2](publish/TraquitoJetpack_Standard.uf2) |
-| **Low Power** | Single clock output (CLK0 only) - Reduced power | [TraquitoJetpack_LowPower.uf2](publish/TraquitoJetpack_LowPower.uf2) |
+| **Standard** | Dual clock output (CLK0 + CLK1) - Maximum power | [TraquitoJetpack_Standard_20260108.uf2](publish/TraquitoJetpack_Standard_20260108.uf2) |
+| **Low Power** | Single clock output (CLK0 only) - Reduced power | [TraquitoJetpack_LowPower_20260108.uf2](publish/TraquitoJetpack_LowPower_20260108.uf2) |
 
 **To flash:** Hold BOOTSEL button, plug in Pico, copy the .uf2 file to the RPI-RP2 drive.
 
