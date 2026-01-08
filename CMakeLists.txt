@@ -17,6 +17,13 @@ include(${PICO_SDK_PATH}/external/pico_sdk_import.cmake)
 # Name project
 project(TraquitoJetpack LANGUAGES C CXX ASM)
 
+# Low power mode option: single clock output instead of dual phase
+option(LOW_POWER_SINGLE_CLOCK "Use single clock output for reduced power consumption" OFF)
+if(LOW_POWER_SINGLE_CLOCK)
+    message(STATUS "LOW POWER MODE: Single clock output enabled")
+    add_compile_definitions(LOW_POWER_SINGLE_CLOCK)
+endif()
+
 # Configure and add picoinf
 set(APP_BUILD_VERSION "2025-12-09 23:04:00")
 set(PICO_INF_ENABLE_JERRYSCRIPT 1)
