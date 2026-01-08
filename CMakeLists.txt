@@ -25,7 +25,11 @@ if(LOW_POWER_SINGLE_CLOCK)
 endif()
 
 # Configure and add picoinf
-set(APP_BUILD_VERSION "2025-12-09 23:04:00")
+# APP_BUILD_VERSION can be passed from command line, otherwise use current time
+if(NOT DEFINED APP_BUILD_VERSION)
+    string(TIMESTAMP APP_BUILD_VERSION "%Y-%m-%d %H:%M:%S")
+endif()
+message(STATUS "Build version: ${APP_BUILD_VERSION}")
 set(PICO_INF_ENABLE_JERRYSCRIPT 1)
 add_subdirectory(ext/picoinf)
 

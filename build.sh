@@ -126,8 +126,13 @@ fi
 echo "Configuring with CMake..."
 cd "${BUILD_DIR}"
 
+# Generate build timestamp for SW version display (YYYY-MM-DD HH:MM:SS)
+BUILD_TIMESTAMP=$(date +"%Y-%m-%d %H:%M:%S")
+echo "Build timestamp: ${BUILD_TIMESTAMP}"
+
 # Build CMake options
 CMAKE_OPTS="-DCMAKE_BUILD_TYPE=MinSizeRel"
+CMAKE_OPTS="${CMAKE_OPTS} -DAPP_BUILD_VERSION=\"${BUILD_TIMESTAMP}\""
 CMAKE_OPTS="${CMAKE_OPTS} -DPICO_SDK_PATH=${PROJECT_DIR}/ext/picoinf/ext/pico-sdk"
 CMAKE_OPTS="${CMAKE_OPTS} -DJERRY_GLOBAL_HEAP_SIZE=24"
 CMAKE_OPTS="${CMAKE_OPTS} -DJERRY_STACK_LIMIT=8"
@@ -154,11 +159,14 @@ make -j$(nproc) TraquitoJetpack
 echo ""
 echo "Copying output files..."
 
+# Generate timestamp for filename (YYYYMMDD-HHMM)
+TIMESTAMP=$(date +"%Y%m%d-%H%M")
+
 # Set output filename suffix based on build mode
 if [ "$LOW_POWER_MODE" = "1" ]; then
-    OUTPUT_SUFFIX="_LowPower_SingleClock"
+    OUTPUT_SUFFIX="_LowPower_SingleClock_${TIMESTAMP}"
 else
-    OUTPUT_SUFFIX=""
+    OUTPUT_SUFFIX="_${TIMESTAMP}"
 fi
 
 if [ -f "${BUILD_DIR}/src/TraquitoJetpack.uf2" ]; then

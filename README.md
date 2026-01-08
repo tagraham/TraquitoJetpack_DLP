@@ -68,9 +68,9 @@ LOW_POWER_MODE=1 docker run --rm -v "$(pwd):/project" traquito-build
 
 **Low power mode**: Uses CLK0 only (single clock output) for reduced power consumption. Better for low solar angle conditions where power budget is limited.
 
-Output files in `output/`:
-- `TraquitoJetpack.uf2` - Standard mode firmware
-- `TraquitoJetpack_LowPower_SingleClock.uf2` - Low power mode firmware
+Output files in `output/` (with build timestamp):
+- `TraquitoJetpack_YYYYMMDD-HHMM.uf2` - Standard mode firmware
+- `TraquitoJetpack_LowPower_SingleClock_YYYYMMDD-HHMM.uf2` - Low power mode firmware
 - `.elf`, `.bin`, `.hex`, `.map` - Debug files (same naming convention)
 
 ### Option 2: Native Build (Advanced)
@@ -104,14 +104,9 @@ This fork includes patches for GCC/Linux compilation:
 
 These patches are applied automatically by `build.sh` during the Docker build.
 
-### TODO: Fork picoinf submodule
+### Forked picoinf Submodule
 
-Currently, the patches above are applied at build time via sed commands in `build.sh`. A cleaner solution would be to:
-1. Fork the [picoinf](https://github.com/dmalnati/picoinf) repository
-2. Apply the patches permanently to the fork
-3. Update this repo's submodule to point to the forked picoinf
-
-This would make the patches more maintainable and easier to review.
+This repo uses a forked [picoinf_DLP](https://github.com/tagraham/picoinf_DLP) submodule with the `LOW_POWER_SINGLE_CLOCK` compile flag built-in. The remaining patches (Time.h wrapper, Clock.cpp fix) are still applied at build time for GCC compatibility.
 
 ## Hardware
 
