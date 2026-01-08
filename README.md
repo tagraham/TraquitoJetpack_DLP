@@ -17,7 +17,7 @@ This is a fork of [dmalnati's TraquitoJetpack](https://github.com/dmalnati/Traqu
 # Build the Docker image (one-time)
 docker build -t traquito-build .
 
-# Build standard firmware (maximum power, dual clock output)
+# Build standard firmware (dual clock output)
 docker run --rm -v "$(pwd):/project" traquito-build
 
 # OR build low power firmware (single clock output)
@@ -57,14 +57,14 @@ Works on Linux, macOS, and Windows (with Docker Desktop).
 # Build the Docker image (one-time)
 docker build -t traquito-build .
 
-# Compile standard firmware (dual clock output for maximum power)
+# Compile standard firmware (dual clock output)
 docker run --rm -v "$(pwd):/project" traquito-build
 
 # Compile low power firmware (single clock output for reduced power consumption)
 LOW_POWER_MODE=1 docker run --rm -v "$(pwd):/project" traquito-build
 ```
 
-**Standard mode** (default): Uses CLK0 + CLK1 with 180-degree phase shift for maximum RF output power. Best for good solar conditions.
+**Standard mode** (default): Uses CLK0 + CLK1 with 180-degree phase shift.
 
 **Low power mode**: Uses CLK0 only (single clock output) for reduced power consumption. Better for low solar angle conditions where power budget is limited.
 
