@@ -2,6 +2,19 @@
 
 WSPR (Weak Signal Propagation Reporter) tracker firmware for RP2040 (Raspberry Pi Pico).
 
+## Download Prebuilt Firmware
+
+Ready-to-flash UF2 files - no build required:
+
+| Version | Description | Download |
+|---------|-------------|----------|
+| **Standard** | Dual clock output (CLK0 + CLK1) - Maximum power | [TraquitoJetpack_Standard.uf2](publish/TraquitoJetpack_Standard.uf2) |
+| **Low Power** | Single clock output (CLK0 only) - Reduced power | [TraquitoJetpack_LowPower.uf2](publish/TraquitoJetpack_LowPower.uf2) |
+
+**To flash:** Hold BOOTSEL button, plug in Pico, copy the .uf2 file to the RPI-RP2 drive.
+
+---
+
 This is a fork of [dmalnati's TraquitoJetpack](https://github.com/dmalnati/TraquitoJetpack) - a fantastic piece of work that makes high-altitude balloon tracking accessible to ham radio enthusiasts everywhere. Huge thanks to the original author for making this available to the community.
 
 **What this fork adds:**
