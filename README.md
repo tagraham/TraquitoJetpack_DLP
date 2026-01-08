@@ -11,12 +11,19 @@ This is a fork of [dmalnati's TraquitoJetpack](https://github.com/dmalnati/Traqu
 
 ## Quick Start
 
+**Requires: Docker installed and running**
+
 ```bash
-# Build firmware (requires Docker)
+# Build the Docker image (one-time)
 docker build -t traquito-build .
+
+# Build standard firmware (maximum power, dual clock output)
 docker run --rm -v "$(pwd):/project" traquito-build
 
-# Flash to Pico: hold BOOTSEL, plug in, copy output/TraquitoJetpack.uf2
+# OR build low power firmware (single clock output)
+LOW_POWER_MODE=1 docker run --rm -v "$(pwd):/project" traquito-build
+
+# Flash to Pico: hold BOOTSEL, plug in, copy .uf2 file from output/ folder
 ```
 
 ## About
@@ -35,6 +42,13 @@ This project relies heavily on the [picoinf](https://github.com/dmalnati/picoinf
 
 ## Building
 
+### Prerequisites
+
+**Docker must be installed and running** before building.
+
+- **Linux/macOS**: Install [Docker Engine](https://docs.docker.com/engine/install/)
+- **Windows**: Install [Docker Desktop](https://www.docker.com/products/docker-desktop/) with WSL2 backend
+
 ### Option 1: Docker (Recommended)
 
 Works on Linux, macOS, and Windows (with Docker Desktop).
@@ -43,14 +57,21 @@ Works on Linux, macOS, and Windows (with Docker Desktop).
 # Build the Docker image (one-time)
 docker build -t traquito-build .
 
-# Compile the firmware
+# Compile standard firmware (dual clock output for maximum power)
 docker run --rm -v "$(pwd):/project" traquito-build
+
+# Compile low power firmware (single clock output for reduced power consumption)
+LOW_POWER_MODE=1 docker run --rm -v "$(pwd):/project" traquito-build
 ```
 
+**Standard mode** (default): Uses CLK0 + CLK1 with 180-degree phase shift for maximum RF output power. Best for good solar conditions.
+
+**Low power mode**: Uses CLK0 only (single clock output) for reduced power consumption. Better for low solar angle conditions where power budget is limited.
+
 Output files in `output/`:
-- `TraquitoJetpack.uf2` - Flash this to your Pico
-- `TraquitoJetpack.elf` - For debugging
-- `TraquitoJetpack.bin` - Raw binary
+- `TraquitoJetpack.uf2` - Standard mode firmware
+- `TraquitoJetpack_LowPower_SingleClock.uf2` - Low power mode firmware
+- `.elf`, `.bin`, `.hex`, `.map` - Debug files (same naming convention)
 
 ### Option 2: Native Build (Advanced)
 
@@ -65,7 +86,9 @@ See original project notes - this is a C++ program built with CMake, not Arduino
 
 1. Hold the **BOOTSEL** button while plugging in the Pico
 2. It will mount as a USB drive (RPI-RP2)
-3. Copy `output/TraquitoJetpack.uf2` to the drive
+3. Copy the `.uf2` file to the drive:
+   - `output/TraquitoJetpack.uf2` (standard mode)
+   - `output/TraquitoJetpack_LowPower_SingleClock.uf2` (low power mode)
 4. The Pico will automatically reboot with the new firmware
 
 Alternative: Flash via SWD using [J-Link](https://www.segger.com/products/debug-probes/j-link/models/j-link-edu-mini/)
@@ -77,8 +100,18 @@ The original code was developed on Windows with MSVC. This fork includes patches
 1. **Time.h wrapper** - Creates missing header bridging `TimeClass.h`
 2. **Clock.cpp fix** - Moves forward declaration for GCC compatibility
 3. **JerryScript config** - Overrides heap size to fit RP2040's 264KB RAM
+4. **WSPRMessageTransmitter.h** - Adds `LOW_POWER_SINGLE_CLOCK` compile option for single clock output
 
 These patches are applied automatically by `build.sh` during the Docker build.
+
+### TODO: Fork picoinf submodule
+
+Currently, the patches above are applied at build time via sed commands in `build.sh`. A cleaner solution would be to:
+1. Fork the [picoinf](https://github.com/dmalnati/picoinf) repository
+2. Apply the patches permanently to the fork
+3. Update this repo's submodule to point to the forked picoinf
+
+This would make the patches more maintainable and easier to review.
 
 ## Hardware
 
