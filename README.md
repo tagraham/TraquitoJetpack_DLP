@@ -6,7 +6,7 @@ This is a fork of [dmalnati's TraquitoJetpack](https://github.com/dmalnati/Traqu
 
 **What this fork adds:**
 - Docker-based build system for easy Linux/macOS/Windows compilation
-- GCC compatibility patches (original was built with MSVC on Windows)
+- GCC compatibility patches for Linux/macOS builds
 - Experiments with lower solar angle operation (work in progress)
 
 ## Quick Start
@@ -95,7 +95,7 @@ Alternative: Flash via SWD using [J-Link](https://www.segger.com/products/debug-
 
 ## Fork Changes
 
-The original code was developed on Windows with MSVC. This fork includes patches for GCC/Linux compilation:
+This fork includes patches for GCC/Linux compilation:
 
 1. **Time.h wrapper** - Creates missing header bridging `TimeClass.h`
 2. **Clock.cpp fix** - Moves forward declaration for GCC compatibility
